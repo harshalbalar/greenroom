@@ -1,0 +1,44 @@
+SARAH CHEN
+san.chen@email.com | (555) 123-4567 | San Francisco, CA | github.com/sarahchen
+
+SUMMARY
+Full-stack software engineer with 4 years of experience building scalable web applications and data pipelines. Strong background in Python, React, and cloud infrastructure. Led migration of monolithic Django app to microservices architecture serving 2M+ users.
+
+EXPERIENCE
+
+Senior Software Engineer | DataFlow Inc. | Jan 2023 - Present
+- Led backend team of 4 engineers rebuilding the data ingestion pipeline, reducing processing time by 65%
+- Designed and implemented real-time analytics dashboard using React, D3.js, and WebSocket streaming
+- Built CI/CD pipeline with GitHub Actions, reducing deployment time from 2 hours to 15 minutes
+- Mentored 2 junior developers through structured code review and pair programming sessions
+
+Software Engineer | CloudBase Systems | Jun 2021 - Dec 2022
+- Developed RESTful APIs using FastAPI and PostgreSQL serving 500K daily requests
+- Implemented event-driven architecture with Apache Kafka for inter-service communication
+- Reduced API latency by 40% through Redis caching and query optimization
+- Collaborated with product team to ship 3 major features ahead of schedule
+
+Junior Developer | WebCraft Agency | Aug 2020 - May 2021
+- Built responsive web applications for 12+ clients using React, TypeScript, and Node.js
+- Created automated testing suite achieving 85% code coverage with Jest and Cypress
+- Developed internal CLI tool for project scaffolding, adopted by entire 20-person team
+
+EDUCATION
+
+B.S. Computer Science | UC Berkeley | 2020
+- Dean's List, relevant coursework: Distributed Systems, Machine Learning, Database Systems
+
+PROJECTS
+
+ScopeOut — Competitive Intelligence Tool
+- Built multi-agent AI system using LangGraph with parallel workers and critic/retry loops
+- Real-time SSE streaming dashboard with pixel-art frontend
+- Tech: Python, LangGraph, FastAPI, React, Tavily API
+
+OpenMetrics Dashboard
+- Open-source monitoring dashboard for Kubernetes clusters
+- 500+ GitHub stars, actively maintained
+- Tech: Go, React, Prometheus, Grafana
+
+SKILLS
+Python, JavaScript/TypeScript, React, FastAPI, Django, Node.js, PostgreSQL, Redis, Apache Kafka, Docker, Kubernetes, AWS (EC2, S3, Lambda, RDS), GitHub Actions, CI/CD, REST APIs, WebSockets, GraphQL, Git, Linux, Agile/Scrum

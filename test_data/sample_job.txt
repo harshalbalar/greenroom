@@ -1,0 +1,38 @@
+Senior Backend Engineer — Stripe
+San Francisco, CA (Hybrid — 3 days in office)
+
+About Stripe:
+Stripe is a financial infrastructure platform for businesses. Millions of companies — from the world's largest enterprises to the most ambitious startups — use Stripe to accept payments, grow their revenue, and accelerate new business opportunities.
+
+About the role:
+We're looking for a Senior Backend Engineer to join our Payments Platform team. You'll work on the core payment processing infrastructure that handles billions of dollars in transactions. This is a high-impact role where your code directly affects Stripe's reliability and performance.
+
+What you'll do:
+- Design and build highly available, low-latency payment processing services
+- Work on distributed systems that process millions of transactions per day
+- Improve system reliability and observability across the payments stack
+- Collaborate with product and infrastructure teams to ship new payment methods
+- Participate in on-call rotation and incident response
+
+What we look for:
+- 4+ years of experience in backend software engineering
+- Strong proficiency in at least one of: Python, Ruby, Java, or Go
+- Experience designing and operating distributed systems at scale
+- Familiarity with relational databases (PostgreSQL, MySQL) and caching layers (Redis, Memcached)
+- Experience with event-driven architectures and message queues (Kafka, RabbitMQ, SQS)
+- Strong understanding of API design and RESTful services
+- Experience with CI/CD pipelines and infrastructure as code
+- Excellent problem-solving skills and attention to reliability
+
+Nice to have:
+- Experience in fintech or payment processing
+- Knowledge of Kubernetes and container orchestration
+- Experience with observability tools (Datadog, Prometheus, Grafana)
+- Contributions to open-source projects
+- Experience mentoring other engineers
+
+Compensation:
+- Salary range: $180,000 - $250,000 depending on experience
+- Equity, benefits, and annual bonus
+
+Stripe is an equal opportunity employer.

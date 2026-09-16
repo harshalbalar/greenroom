@@ -1,0 +1,18 @@
+# Greenroom Phase 1 — Core Pipeline
+langgraph>=0.4.0
+langchain-google-genai>=2.1.0
+langchain-core>=0.3.0
+tavily-python>=0.5.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Phase 2 — Job Discovery
+requests>=2.31.0
+
+# Phase 3 — Backend & User System
+fastapi>=0.111.0
+uvicorn>=0.30.0
+sqlalchemy>=2.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.9
