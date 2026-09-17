@@ -9,7 +9,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
-from routes import auth, resumes, preferences, jobs, applications
+from routes import auth, resumes, preferences
+from routes import jobs_v2 as jobs
+from routes import applications_v2 as applications
+from routes import events
 
 
 @asynccontextmanager
@@ -23,7 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Greenroom API",
     description="Your applications, prepped and ready.",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -42,6 +45,8 @@ app.include_router(resumes.router)
 app.include_router(preferences.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
+app.include_router(events.router)
+
 
 @app.get("/")
 def root():
