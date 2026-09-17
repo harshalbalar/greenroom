@@ -62,8 +62,6 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     name = Column(String, default="")
     created_at = Column(DateTime(timezone=True), default=utcnow)
-
-    # Phase 6C: email notification opt-in (default on)
     email_notifications = Column(Boolean, default=True)
 
     resumes = relationship("Resume", back_populates="user")
@@ -108,6 +106,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     source = Column(String, nullable=False)
     title = Column(String, nullable=False)
     company = Column(String, nullable=False)
@@ -139,6 +138,7 @@ class Job(Base):
         Index("idx_jobs_status", "status"),
         Index("idx_jobs_score", "overall_score"),
         Index("idx_jobs_discovered", "discovered_at"),
+        Index("idx_jobs_user", "user_id"),
     )
 
 
@@ -168,7 +168,6 @@ class Application(Base):
 
 
 class BackgroundTask(Base):
-    """Tracks background task status (replaces raw SQL in worker.py)."""
     __tablename__ = "background_tasks"
 
     id = Column(String, primary_key=True)
@@ -183,16 +182,14 @@ class BackgroundTask(Base):
 
 
 class Notification(Base):
-    """In-app notifications for users (Phase 6C)."""
     __tablename__ = "notifications"
 
     id = Column(String, primary_key=True, default=new_id)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     type = Column(String, nullable=False)
-    # types: "new_jobs", "morning_brief", "app_ready", "app_status"
     title = Column(String, nullable=False)
     body = Column(Text, default="")
-    data = Column(JSON, default=dict)   # extra payload (job counts, top matches, etc.)
+    data = Column(JSON, default=dict)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
@@ -203,9 +200,7 @@ class Notification(Base):
     )
 
 
-# ── Table creation (DEV ONLY — use Alembic in production) ─────────────
+# ── Table creation (DEV ONLY) ─────────────────────────────────────────
 
 def init_db():
-    """Create all tables. Only for local dev bootstrapping.
-    In production, Alembic handles migrations."""
     Base.metadata.create_all(bind=engine)

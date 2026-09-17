@@ -35,11 +35,7 @@ def trigger_scan(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Scan all job sources. Runs in background, returns task_id.
-
-    Poll GET /api/events/{task_id}/status for progress.
-    Stream GET /api/events/{task_id} for SSE updates.
-    """
+    """Scan all job sources. Runs in background, returns task_id."""
     pref = db.query(Preference).filter(Preference.user_id == user.id).first()
     if not pref:
         raise HTTPException(status_code=400, detail="Set your preferences first")
@@ -53,7 +49,6 @@ def trigger_scan(
     preferences = _prefs_from_db(pref)
     parsed_resume = ParsedResume(**(resume.parsed_data if resume else {}))
 
-    # Submit to background worker — returns immediately
     task_id = task_manager.submit(
         "scan_and_score",
         task_scan_and_score,
@@ -77,8 +72,8 @@ def list_jobs(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List discovered jobs, optionally filtered."""
-    query = db.query(Job)
+    """List discovered jobs for the current user only."""
+    query = db.query(Job).filter(Job.user_id == user.id)
 
     if worth_only:
         query = query.filter(Job.is_worth_applying == True)
@@ -110,8 +105,8 @@ def get_job(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get a single job's full details."""
-    job = db.query(Job).filter(Job.id == job_id).first()
+    """Get a single job's full details (must belong to current user)."""
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 

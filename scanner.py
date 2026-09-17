@@ -6,8 +6,6 @@ Job scanner — orchestrates the full discovery flow.
 3. Deduplicate against the store
 4. Score each new job using the Phase 1 scorer
 5. Store results
-
-Reuses the Phase 1 job scorer node directly — no duplication.
 """
 
 import json
@@ -22,9 +20,9 @@ from sources.base import BaseJobSource, DiscoveredJob
 from sources.jsearch import JSearchSource
 from sources.adzuna import AdzunaSource
 from store import JobStore
+from worker import task_manager
 
 
-# Registry of all available sources
 ALL_SOURCES: list[BaseJobSource] = [
     JSearchSource(),
     AdzunaSource(),
@@ -32,13 +30,8 @@ ALL_SOURCES: list[BaseJobSource] = [
 
 
 def build_search_queries(preferences: UserPreferences) -> list[dict]:
-    """Turn user preferences into concrete search queries.
-
-    Returns list of dicts with 'query', 'location', 'remote_only' keys.
-    Each gets sent to every configured source.
-    """
+    """Turn user preferences into concrete search queries."""
     queries = []
-
     locations = preferences.locations if preferences.locations else [""]
     roles = preferences.target_roles if preferences.target_roles else ["Software Engineer"]
 
@@ -60,45 +53,29 @@ def scan_jobs(
     store: JobStore | None = None,
     score_results: bool = True,
     verbose: bool = True,
+    task_id: str = "",
 ) -> dict:
-    """Run a full scan: search → dedup → score → store.
-
-    Args:
-        preferences: User's job targeting criteria.
-        parsed_resume: Structured resume data (from Phase 1 parser).
-        store: JobStore instance. Creates default if None.
-        score_results: Whether to score discovered jobs (uses LLM calls).
-        verbose: Print progress updates.
-
-    Returns:
-        Summary dict with counts and top matches.
-    """
+    """Run a full scan: search → dedup → score → store."""
     if store is None:
         store = JobStore()
 
-    # Determine which sources are configured
     active_sources = [s for s in ALL_SOURCES if s.is_configured()]
     if not active_sources:
-        print("  No job sources configured. Add API keys to .env:")
-        print("  - JSearch: JSEARCH_API_KEY (https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch)")
-        print("  - Adzuna: ADZUNA_APP_ID + ADZUNA_APP_KEY (https://developer.adzuna.com)")
+        if verbose:
+            print("  No job sources configured.")
         return {"error": "No sources configured"}
 
     if verbose:
         print(f"  Active sources: {', '.join(s.name for s in active_sources)}")
 
-    # Build search queries from preferences
     queries = build_search_queries(preferences)
-    if verbose:
-        print(f"  Search queries: {len(queries)}")
-        for q in queries:
-            loc = q['location'] or ('remote' if q['remote_only'] else 'any location')
-            print(f"    - \"{q['query']}\" in {loc}")
 
     # Search all sources
     all_discovered: list[DiscoveredJob] = []
     for source in active_sources:
         for q in queries:
+            if task_id:
+                task_manager.update_progress(task_id, f"scout: searching {source.name}...")
             if verbose:
                 print(f"\n  [{source.name}] Searching: {q['query']}", end="")
                 if q["location"]:
@@ -116,8 +93,8 @@ def scan_jobs(
                 print(f"  [{source.name}] Found {len(results)} jobs")
             all_discovered.extend(results)
 
-    if verbose:
-        print(f"\n  Total discovered: {len(all_discovered)} jobs")
+    if task_id:
+        task_manager.update_progress(task_id, f"scout: found {len(all_discovered)} jobs, deduplicating...")
 
     # Deduplicate against store
     new_jobs: list[DiscoveredJob] = []
@@ -134,16 +111,22 @@ def scan_jobs(
     # Score new jobs
     scored_jobs = []
     if score_results and new_jobs:
-        if verbose:
-            print(f"\n  Scoring {len(new_jobs)} jobs...")
+        if task_id:
+            task_manager.update_progress(task_id, f"analyst: scoring {len(new_jobs)} jobs...")
 
         for i, job in enumerate(new_jobs):
+            job_id = store.get_job_id(job)
+
+            if task_id:
+                task_manager.update_progress(
+                    task_id, f"analyst: scoring {job.title} @ {job.company} [{i+1}/{len(new_jobs)}]"
+                )
+
             if verbose:
                 print(f"  [{i+1}/{len(new_jobs)}] {job.title} @ {job.company}...", end=" ")
 
             start = time.time()
 
-            # Build a minimal PipelineState for the scorer
             score_state: PipelineState = {
                 "resume_raw": "",
                 "job": JobDescription(
@@ -171,36 +154,20 @@ def scan_jobs(
             score = result.get("score", JobScore())
             elapsed = time.time() - start
 
-            store.save_score(job.job_id, score)
+            store.save_score(job_id, score)
 
             if verbose:
                 marker = "+" if score.is_worth_applying else "-"
                 print(f"[{marker}] {score.overall_score}/100 ({elapsed:.1f}s)")
 
-            scored_jobs.append({
-                "job": job,
-                "score": score,
-            })
+            scored_jobs.append({"job": job, "score": score})
 
-    # Summary
     stats = store.get_stats()
     top_matches = store.get_top_matches(limit=5)
 
     if verbose:
-        print(f"\n  {'='*50}")
-        print(f"  Scan complete!")
-        print(f"  Total in DB: {stats['total']} | "
-              f"Scored: {stats['scored']} | "
-              f"Worth applying: {stats['worth_applying']} | "
-              f"Skipped: {stats['skipped']}")
-
-        if top_matches:
-            print(f"\n  Top matches:")
-            for m in top_matches:
-                skills = json.loads(m.get("matching_skills", "[]"))
-                skills_str = ", ".join(skills[:4])
-                print(f"    {m['overall_score']}/100 | {m['title']} @ {m['company']}")
-                print(f"           Matching: {skills_str}")
+        print(f"\n  Scan complete!")
+        print(f"  Total: {stats['total']} | Worth: {stats['worth_applying']} | Skipped: {stats['skipped']}")
 
     return {
         "new_jobs": len(new_jobs),

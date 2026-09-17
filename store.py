@@ -1,11 +1,11 @@
 """
 Job store — SQLAlchemy ORM implementation.
 
-Handles dedup (don't process the same job twice), scoring results,
-and status tracking. All queries go through the shared PostgreSQL
-database via SQLAlchemy — no separate sqlite3 connection.
+Each user gets their own copy of a job with their own scores,
+because scores depend on the user's resume and preferences.
 """
 
+import hashlib
 from datetime import datetime, timezone
 
 from database import SessionLocal, Job, utcnow
@@ -14,12 +14,25 @@ from state import JobScore
 from utils import parse_job_date
 
 
+def _make_job_id(job: DiscoveredJob, user_id: str) -> str:
+    """Generate a job ID unique to each user.
+
+    Same posting discovered by two users = two rows with different IDs,
+    because each gets scored against a different resume.
+    """
+    key = job.url if job.url else f"{job.title}|{job.company}"
+    key = f"{key}|{user_id}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
 class JobStore:
     """Job storage using SQLAlchemy ORM.
 
-    Each method opens and closes its own session so the store
-    works safely from background threads (scanner, workers).
+    Every method that touches user-specific data requires user_id.
     """
+
+    def __init__(self, user_id: str = ""):
+        self.user_id = user_id
 
     def job_exists(self, job_id: str) -> bool:
         """Check if a job is already in the store (for dedup)."""
@@ -28,11 +41,14 @@ class JobStore:
 
     def add_job(self, job: DiscoveredJob) -> bool:
         """Add a discovered job. Returns False if duplicate."""
-        if self.job_exists(job.job_id):
+        job_id = _make_job_id(job, self.user_id) if self.user_id else job.job_id
+
+        if self.job_exists(job_id):
             return False
 
         db_job = Job(
-            id=job.job_id,
+            id=job_id,
+            user_id=self.user_id or None,
             source=job.source,
             title=job.title,
             company=job.company,
@@ -75,38 +91,40 @@ class JobStore:
 
             session.commit()
 
+    def get_job_id(self, job: DiscoveredJob) -> str:
+        """Get the user-scoped job ID for a discovered job."""
+        return _make_job_id(job, self.user_id) if self.user_id else job.job_id
+
     def get_unscored_jobs(self, limit: int = 20) -> list[dict]:
         """Get jobs that haven't been scored yet."""
         with SessionLocal() as session:
-            jobs = (
-                session.query(Job)
-                .filter(Job.status == "discovered")
-                .order_by(Job.discovered_at.desc())
-                .limit(limit)
-                .all()
-            )
+            query = session.query(Job).filter(Job.status == "discovered")
+            if self.user_id:
+                query = query.filter(Job.user_id == self.user_id)
+            jobs = query.order_by(Job.discovered_at.desc()).limit(limit).all()
             return [self._job_to_dict(j) for j in jobs]
 
     def get_top_matches(self, limit: int = 10) -> list[dict]:
         """Get highest-scoring jobs worth applying to."""
         with SessionLocal() as session:
-            jobs = (
-                session.query(Job)
-                .filter(Job.is_worth_applying == True)
-                .order_by(Job.overall_score.desc())
-                .limit(limit)
-                .all()
-            )
+            query = session.query(Job).filter(Job.is_worth_applying == True)
+            if self.user_id:
+                query = query.filter(Job.user_id == self.user_id)
+            jobs = query.order_by(Job.overall_score.desc()).limit(limit).all()
             return [self._job_to_dict(j) for j in jobs]
 
     def get_stats(self) -> dict:
         """Summary stats for the store."""
         with SessionLocal() as session:
-            total = session.query(Job).count()
-            scored = session.query(Job).filter(Job.scored_at.isnot(None)).count()
-            worth = session.query(Job).filter(Job.is_worth_applying == True).count()
-            skipped = session.query(Job).filter(Job.status == "skipped").count()
-            unscored = session.query(Job).filter(Job.status == "discovered").count()
+            base = session.query(Job)
+            if self.user_id:
+                base = base.filter(Job.user_id == self.user_id)
+
+            total = base.count()
+            scored = base.filter(Job.scored_at.isnot(None)).count()
+            worth = base.filter(Job.is_worth_applying == True).count()
+            skipped = base.filter(Job.status == "skipped").count()
+            unscored = base.filter(Job.status == "discovered").count()
             return {
                 "total": total,
                 "scored": scored,
@@ -117,7 +135,7 @@ class JobStore:
 
     @staticmethod
     def _job_to_dict(job: Job) -> dict:
-        """Convert a Job ORM object to a dict (for backward compat with scanner)."""
+        """Convert a Job ORM object to a dict."""
         return {
             "id": job.id,
             "source": job.source,

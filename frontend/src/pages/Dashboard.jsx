@@ -39,8 +39,8 @@ export default function Dashboard({ user, onLogout }) {
   const [showSetup, setShowSetup] = useState(false)
   const [scanProg, setScanProg] = useState('')
   const bsRef = useRef()
-  const lastProgRef = useRef('')
-const lastFeedRef = useRef('')
+ const lastProgRef = useRef('')
+  const lastFeedRef = useRef('')  // you already added this
   const feedKeys = useRef(new Set())
 
   useEffect(() => { load() }, [])
@@ -56,11 +56,10 @@ const lastFeedRef = useRef('')
   }
 
   function addFeed(agent, text) {
-    // Strip crew name prefix if backend sent "scout: message"
     let clean = text.replace(/^(scout|analyst|remy|taylor|quinn)[:\s]+/i, '')
-    // Never add the exact same message twice in a row
-    if (clean === lastFeedRef.current) return
-    lastFeedRef.current = clean
+    // Use the feedKeys set to prevent ANY duplicate, not just consecutive
+    if (feedKeys.current.has(clean)) return
+    feedKeys.current.add(clean)
     setFeed(prev => [{
       agent,
       text: clean,
@@ -124,7 +123,7 @@ const lastFeedRef = useRef('')
             lastProgRef.current = s.progress; const a = agentFor(s.progress)
             bsRef.current?.say(a, s.progress.slice(0,35), 2500)
             addFeed(a, s.progress)
-            step = Math.min(step + 1, 4); bsRef.current?.moveDoc(step)
+            bsRef.current?.moveDoc(a)  // move doc to the ACTIVE agent, not step counter
           }
           if (s.status === 'completed') { clearInterval(p); bsRef.current?.hideDoc(); bsRef.current?.say(4, 'prepped and ready!', 3000); addFeed(4, `${job.company} application ready!`); setPrepping(false); lastProgRef.current = ''; await load() }
           if (s.status === 'failed') { clearInterval(p); bsRef.current?.hideDoc(); addFeed(0, 'prep failed'); setPrepping(false) }

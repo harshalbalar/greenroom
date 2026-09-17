@@ -29,23 +29,21 @@ def task_scan_and_score(
     parsed_resume_dict: dict,
     task_id: str = "",
 ) -> dict:
-    """Background task: scan job sources + score all results.
-
-    This is what timed out in Phase 3 when done synchronously.
-    Now it runs in a background thread and reports progress.
-    """
+    """Background task: scan job sources + score all results."""
     preferences = UserPreferences(**preferences_dict)
     parsed_resume = ParsedResume(**parsed_resume_dict)
 
     task_manager.update_progress(task_id, "Searching job sources...")
 
-    store = JobStore()
+    # Pass user_id so jobs are scoped to this user
+    store = JobStore(user_id=user_id)
     results = scan_jobs(
         preferences=preferences,
         parsed_resume=parsed_resume,
         store=store,
         score_results=True,
         verbose=False,
+        task_id=task_id,
     )
 
     return {
@@ -65,12 +63,7 @@ def task_process_application(
     job_dict: dict,
     task_id: str = "",
 ) -> dict:
-    """Background task: run the full pipeline for one job.
-
-    The application row already exists in 'processing' state.
-    This task fills in the content and sets status to 'ready'.
-    """
-    # Check for duplicate (another task may have already processed this)
+    """Background task: run the full pipeline for one job."""
     db = SessionLocal()
     try:
         existing = db.query(Application).filter(Application.id == app_id).first()
@@ -96,7 +89,6 @@ def task_process_application(
         "status": "starting",
     }
 
-    # Run nodes one by one with crew-flavored progress
     task_manager.update_progress(task_id, f"scout: picking up {company_name} application")
     state.update(_parse(state))
 
@@ -117,7 +109,6 @@ def task_process_application(
     task_manager.update_progress(task_id, f"quinn: generating interview prep questions")
     state.update(_prep(state))
 
-    # Save results to the existing application row
     task_manager.update_progress(task_id, "Saving results...")
 
     db = SessionLocal()
@@ -158,11 +149,7 @@ def task_batch_process(
     parsed_resume_dict: dict,
     task_id: str = "",
 ) -> dict:
-    """Background task: process multiple jobs sequentially.
-
-    Runs the full pipeline for each job, one at a time (to avoid
-    hitting Gemini rate limits). Reports progress per job.
-    """
+    """Background task: process multiple jobs sequentially."""
     results = []
     db = SessionLocal()
 
@@ -177,7 +164,6 @@ def task_batch_process(
                 results.append({"job_id": job_id, "error": "Job not found"})
                 continue
 
-            # Check if application already exists
             existing = db.query(Application).filter(
                 Application.user_id == user_id,
                 Application.job_id == job_id,
@@ -201,6 +187,7 @@ def task_batch_process(
                 result = task_process_application(
                     user_id=user_id,
                     job_id=job_id,
+                    app_id=new_id(),
                     resume_raw=resume_raw,
                     parsed_resume_dict=parsed_resume_dict,
                     job_dict=job_dict,
@@ -210,9 +197,6 @@ def task_batch_process(
             except Exception as e:
                 results.append({"job_id": job_id, "error": str(e)})
 
-        return {
-            "processed": len(results),
-            "results": results,
-        }
+        return {"processed": len(results), "results": results}
     finally:
         db.close()
