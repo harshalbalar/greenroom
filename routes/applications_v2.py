@@ -79,12 +79,23 @@ def create_application(
         "source": job.source,
     }
 
+    # Create application in "processing" state NOW so it shows in "In Rehearsal"
+    app = Application(
+        id=new_id(),
+        user_id=user.id,
+        job_id=req.job_id,
+        status="processing",
+    )
+    db.add(app)
+    db.commit()
+
     # Submit to background worker
     task_id = task_manager.submit(
         "process_application",
         task_process_application,
         user_id=user.id,
         job_id=req.job_id,
+        app_id=app.id,
         resume_raw=resume.raw_text,
         parsed_resume_dict=parsed_resume_dict,
         job_dict=job_dict,

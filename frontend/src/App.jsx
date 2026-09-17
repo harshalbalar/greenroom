@@ -1,0 +1,36 @@
+import { useState, useEffect } from 'react'
+import { auth, setToken, getToken } from './api'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+
+export default function App() {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (getToken()) {
+      auth.me()
+        .then(setUser)
+        .catch(() => setToken(null))
+        .finally(() => setLoading(false))
+    } else {
+      setLoading(false)
+    }
+  }, [])
+
+  function handleAuth(token, userData) {
+    setToken(token)
+    setUser(userData)
+  }
+
+  function handleLogout() {
+    setToken(null)
+    setUser(null)
+  }
+
+  if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0d0a12'}}><div className="spinner" style={{width:24,height:24}} /></div>
+
+  if (!user) return <Login onAuth={handleAuth} />
+
+  return <Dashboard user={user} onLogout={handleLogout} />
+}

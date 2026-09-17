@@ -59,6 +59,7 @@ def task_scan_and_score(
 def task_process_application(
     user_id: str,
     job_id: str,
+    app_id: str,
     resume_raw: str,
     parsed_resume_dict: dict,
     job_dict: dict,
@@ -66,10 +67,20 @@ def task_process_application(
 ) -> dict:
     """Background task: run the full pipeline for one job.
 
-    Runs all 6 nodes sequentially (bypassing the graph gate since
-    the user explicitly chose this job). Reports progress per node.
+    The application row already exists in 'processing' state.
+    This task fills in the content and sets status to 'ready'.
     """
+    # Check for duplicate (another task may have already processed this)
+    db = SessionLocal()
+    try:
+        existing = db.query(Application).filter(Application.id == app_id).first()
+        if existing and existing.status == 'ready':
+            return {"application_id": app_id, "status": "already_done"}
+    finally:
+        db.close()
+
     parsed_resume = ParsedResume(**parsed_resume_dict)
+    company_name = job_dict.get("company", "the company")
 
     state: PipelineState = {
         "resume_raw": resume_raw,
@@ -85,39 +96,40 @@ def task_process_application(
         "status": "starting",
     }
 
-    # Run nodes one by one, reporting progress
-    task_manager.update_progress(task_id, "Parsing resume...")
+    # Run nodes one by one with crew-flavored progress
+    task_manager.update_progress(task_id, f"scout: picking up {company_name} application")
     state.update(_parse(state))
 
-    task_manager.update_progress(task_id, "Scoring job match...")
+    task_manager.update_progress(task_id, f"analyst: scoring match against your profile")
     state.update(_score(state))
 
-    task_manager.update_progress(task_id, "Researching company...")
+    score = state.get("score")
+    score_val = score.overall_score if score else 0
+    task_manager.update_progress(task_id, f"remy: researching {company_name}... score {score_val}/100")
     state.update(_research(state))
 
-    task_manager.update_progress(task_id, "Tailoring resume...")
+    task_manager.update_progress(task_id, f"taylor: tailoring resume for {company_name}")
     state.update(_tailor(state))
 
-    task_manager.update_progress(task_id, "Writing cover letter...")
+    task_manager.update_progress(task_id, f"quinn: writing cover letter for {company_name}")
     state.update(_cover(state))
 
-    task_manager.update_progress(task_id, "Generating interview prep...")
+    task_manager.update_progress(task_id, f"quinn: generating interview prep questions")
     state.update(_prep(state))
 
-    # Save results to the applications table
+    # Save results to the existing application row
     task_manager.update_progress(task_id, "Saving results...")
 
     db = SessionLocal()
     try:
-        app = Application(
-            id=new_id(),
-            user_id=user_id,
-            job_id=job_id,
-            status="ready",
-            tailored_resume=state.get("tailored_resume", ""),
-            cover_letter=state.get("cover_letter", ""),
-            interview_prep=state.get("interview_prep", ""),
-        )
+        app = db.query(Application).filter(Application.id == app_id).first()
+        if not app:
+            return {"error": "Application not found"}
+
+        app.status = "ready"
+        app.tailored_resume = state.get("tailored_resume", "")
+        app.cover_letter = state.get("cover_letter", "")
+        app.interview_prep = state.get("interview_prep", "")
 
         research = state.get("company_research")
         if research and hasattr(research, "model_dump"):
@@ -127,7 +139,6 @@ def task_process_application(
         if score and hasattr(score, "model_dump"):
             app.score_data = score.model_dump()
 
-        db.add(app)
         db.commit()
 
         return {
