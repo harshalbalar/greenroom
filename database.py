@@ -1,10 +1,10 @@
 """
 Greenroom database — SQLAlchemy models + session management.
 
-All tables in one file for Phase 3. Swap SQLite → PostgreSQL
-in Phase 7 by changing SQLALCHEMY_URL in .env.
+PostgreSQL in production (Render), PostgreSQL locally for dev parity.
+Migrations handled by Alembic — never call create_all() in production.
 
-Models: User, Resume, Preference, Job, Application
+Models: User, Resume, Preference, Job, Application, BackgroundTask
 """
 
 import uuid
@@ -21,11 +21,9 @@ from config import settings
 
 # ── Engine + Session ──────────────────────────────────────────────────
 
-SQLALCHEMY_URL = f"sqlite:///{settings.DB_PATH}"
-
 engine = create_engine(
-    SQLALCHEMY_URL,
-    connect_args={"check_same_thread": False},  # SQLite needs this for FastAPI
+    settings.DATABASE_URL,
+    pool_pre_ping=True,   # reconnect on stale connections (important for production)
     echo=False,
 )
 
@@ -47,6 +45,13 @@ def new_id() -> str:
     return uuid.uuid4().hex[:16]
 
 
+# ── Utility ───────────────────────────────────────────────────────────
+
+def utcnow() -> datetime:
+    """Consistent UTC timestamps everywhere."""
+    return datetime.now(timezone.utc)
+
+
 # ── Models ────────────────────────────────────────────────────────────
 
 class User(Base):
@@ -56,9 +61,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     name = Column(String, default="")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=utcnow)
 
-    # Relationships
     resumes = relationship("Resume", back_populates="user")
     preference = relationship("Preference", back_populates="user", uselist=False)
     applications = relationship("Application", back_populates="user")
@@ -70,10 +74,10 @@ class Resume(Base):
     id = Column(String, primary_key=True, default=new_id)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     raw_text = Column(Text, default="")
-    parsed_data = Column(JSON, default=dict)  # ParsedResume as dict
+    parsed_data = Column(JSON, default=dict)
     filename = Column(String, default="")
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=utcnow)
 
     user = relationship("User", back_populates="resumes")
 
@@ -91,7 +95,7 @@ class Preference(Base):
     company_size_preference = Column(JSON, default=list)
     industries = Column(JSON, default=list)
     dealbreakers = Column(JSON, default=list)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=utcnow)
 
     user = relationship("User", back_populates="preference")
 
@@ -108,9 +112,11 @@ class Job(Base):
     salary_range = Column(String, default="")
     description = Column(Text, default="")
     url = Column(String, default="")
-    posted_at = Column(String, default="")
     employment_type = Column(String, default="")
-    discovered_at = Column(String, default="")
+
+    # Dates — proper DateTime, not strings
+    posted_at = Column(DateTime(timezone=True), nullable=True)
+    discovered_at = Column(DateTime(timezone=True), default=utcnow)
 
     # Scoring
     overall_score = Column(Integer, nullable=True)
@@ -123,13 +129,14 @@ class Job(Base):
     matching_skills = Column(JSON, nullable=True)
     missing_skills = Column(JSON, nullable=True)
     is_worth_applying = Column(Boolean, nullable=True)
-    scored_at = Column(String, nullable=True)
+    scored_at = Column(DateTime(timezone=True), nullable=True)
 
     status = Column(String, default="discovered")
 
     __table_args__ = (
         Index("idx_jobs_status", "status"),
         Index("idx_jobs_score", "overall_score"),
+        Index("idx_jobs_discovered", "discovered_at"),
     )
 
 
@@ -140,7 +147,6 @@ class Application(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     job_id = Column(String, ForeignKey("jobs.id"), nullable=False)
     status = Column(String, default="queued")
-    # queued → ready → applied → interviewing → offered | rejected | ghosted
 
     tailored_resume = Column(Text, default="")
     cover_letter = Column(Text, default="")
@@ -148,19 +154,35 @@ class Application(Base):
     company_research = Column(JSON, default=dict)
     score_data = Column(JSON, default=dict)
 
-    applied_at = Column(DateTime, nullable=True)
-    followed_up_at = Column(DateTime, nullable=True)
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+    followed_up_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, default="")
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user = relationship("User", back_populates="applications")
     job = relationship("Job")
 
 
-# ── Table creation ────────────────────────────────────────────────────
+class BackgroundTask(Base):
+    """Tracks background task status (replaces raw SQL in worker.py)."""
+    __tablename__ = "background_tasks"
+
+    id = Column(String, primary_key=True)
+    task_type = Column(String, nullable=False)
+    status = Column(String, default="pending")
+    progress = Column(Text, default="")
+    result = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+# ── Table creation (DEV ONLY — use Alembic in production) ─────────────
 
 def init_db():
-    """Create all tables. Safe to call repeatedly — skips existing tables."""
+    """Create all tables. Only for local dev bootstrapping.
+    In production, Alembic handles migrations."""
     Base.metadata.create_all(bind=engine)

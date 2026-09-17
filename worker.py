@@ -1,7 +1,7 @@
 """
 Background task manager.
 
-Uses Python's ThreadPoolExecutor + SQLite for task tracking.
+Uses Python's ThreadPoolExecutor + SQLAlchemy for task tracking.
 No Redis or Celery needed for MVP. Upgrade path: swap executor
 for Celery worker, keep the same task interface.
 
@@ -12,42 +12,9 @@ Usage:
 
 import uuid
 import json
-import threading
 import traceback
-from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
-from database import engine
-from sqlalchemy import text
-
-
-# Simple SQLite task table (created on first use)
-_init_lock = threading.Lock()
-_initialized = False
-
-
-def _ensure_table():
-    global _initialized
-    if _initialized:
-        return
-    with _init_lock:
-        if _initialized:
-            return
-        with engine.connect() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS background_tasks (
-                    id TEXT PRIMARY KEY,
-                    task_type TEXT NOT NULL,
-                    status TEXT DEFAULT 'pending',
-                    progress TEXT DEFAULT '',
-                    result TEXT,
-                    error TEXT,
-                    created_at TEXT,
-                    started_at TEXT,
-                    completed_at TEXT
-                )
-            """))
-            conn.commit()
-        _initialized = True
+from database import SessionLocal, BackgroundTask, utcnow
 
 
 class TaskManager:
@@ -55,35 +22,37 @@ class TaskManager:
 
     def __init__(self, max_workers: int = 3):
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
-        _ensure_table()
 
     def submit(self, task_type: str, fn, *args, **kwargs) -> str:
         """Submit a function to run in the background. Returns task_id."""
         task_id = uuid.uuid4().hex[:12]
 
-        with engine.connect() as conn:
-            conn.execute(text("""
-                INSERT INTO background_tasks (id, task_type, status, created_at)
-                VALUES (:id, :type, 'pending', :now)
-            """), {"id": task_id, "type": task_type, "now": datetime.now(timezone.utc).isoformat()})
-            conn.commit()
+        with SessionLocal() as session:
+            task = BackgroundTask(
+                id=task_id,
+                task_type=task_type,
+                status="pending",
+                created_at=utcnow(),
+            )
+            session.add(task)
+            session.commit()
 
         def wrapper():
             try:
-                self._update(task_id, status="running", started_at=datetime.now(timezone.utc).isoformat())
+                self._update(task_id, status="running", started_at=utcnow())
                 result = fn(*args, task_id=task_id, **kwargs)
                 self._update(
                     task_id,
                     status="completed",
                     result=json.dumps(result) if result else None,
-                    completed_at=datetime.now(timezone.utc).isoformat(),
+                    completed_at=utcnow(),
                 )
             except Exception as e:
                 self._update(
                     task_id,
                     status="failed",
                     error=f"{e}\n{traceback.format_exc()}",
-                    completed_at=datetime.now(timezone.utc).isoformat(),
+                    completed_at=utcnow(),
                 )
 
         self.executor.submit(wrapper)
@@ -95,41 +64,68 @@ class TaskManager:
 
     def get_status(self, task_id: str) -> dict | None:
         """Get current status of a task."""
-        _ensure_table()
-        with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT * FROM background_tasks WHERE id = :id"),
-                {"id": task_id},
-            ).mappings().first()
-            if not row:
+        with SessionLocal() as session:
+            task = session.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
+            if not task:
                 return None
-            d = dict(row)
+
+            d = {
+                "id": task.id,
+                "task_type": task.task_type,
+                "status": task.status,
+                "progress": task.progress or "",
+                "result": task.result,
+                "error": task.error,
+                "created_at": task.created_at.isoformat() if task.created_at else None,
+                "started_at": task.started_at.isoformat() if task.started_at else None,
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            }
+
+            # Parse JSON result if present
             if d.get("result"):
                 try:
                     d["result"] = json.loads(d["result"])
                 except json.JSONDecodeError:
                     pass
+
             return d
 
     def get_recent(self, limit: int = 10) -> list[dict]:
         """Get recent tasks."""
-        _ensure_table()
-        with engine.connect() as conn:
-            rows = conn.execute(
-                text("SELECT * FROM background_tasks ORDER BY created_at DESC LIMIT :lim"),
-                {"lim": limit},
-            ).mappings().all()
-            return [dict(r) for r in rows]
+        with SessionLocal() as session:
+            tasks = (
+                session.query(BackgroundTask)
+                .order_by(BackgroundTask.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            results = []
+            for task in tasks:
+                d = {
+                    "id": task.id,
+                    "task_type": task.task_type,
+                    "status": task.status,
+                    "progress": task.progress or "",
+                    "result": task.result,
+                    "error": task.error,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "started_at": task.started_at.isoformat() if task.started_at else None,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                }
+                results.append(d)
+            return results
 
     def _update(self, task_id: str, **fields):
         """Update task fields in the database."""
         if not fields:
             return
-        sets = ", ".join(f"{k} = :{k}" for k in fields)
-        fields["id"] = task_id
-        with engine.connect() as conn:
-            conn.execute(text(f"UPDATE background_tasks SET {sets} WHERE id = :id"), fields)
-            conn.commit()
+        with SessionLocal() as session:
+            task = session.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
+            if not task:
+                return
+            for key, value in fields.items():
+                setattr(task, key, value)
+            session.commit()
 
 
 # Global singleton

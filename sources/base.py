@@ -3,6 +3,10 @@ Base class for all job sources.
 
 Every source (JSearch, Adzuna, future ones) implements this interface.
 Adding a new source = one new file + register it in the scanner.
+
+Note: DiscoveredJob keeps dates as strings because that's what
+the APIs return. Conversion to datetime happens in store.py
+when the job enters the database.
 """
 
 from abc import ABC, abstractmethod
@@ -22,9 +26,9 @@ class DiscoveredJob:
     salary_range: str
     description: str
     url: str
-    posted_at: str = ""
-    employment_type: str = ""  # "full_time" | "contract" | "part_time"
-    discovered_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    posted_at: str = ""           # raw string from API — parsed in store.py
+    employment_type: str = ""     # "full_time" | "contract" | "part_time"
+    discovered_at: str = ""       # no longer used for DB storage; store.py uses utcnow()
 
     @property
     def job_id(self) -> str:

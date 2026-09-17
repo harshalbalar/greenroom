@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Environment
+.env
+
+# Database (local only — production uses Render PostgreSQL)
+*.db
+greenroom.db
+
+# Node
+frontend/node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic
+alembic/__pycache__/

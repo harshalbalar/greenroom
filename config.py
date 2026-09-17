@@ -1,3 +1,11 @@
+"""
+Greenroom configuration.
+
+Reads all settings from environment variables (via .env).
+DATABASE_URL controls the database — PostgreSQL in production,
+PostgreSQL locally for dev parity.
+"""
+
 import os
 from dotenv import load_dotenv
 
@@ -7,7 +15,7 @@ load_dotenv()
 class Settings:
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     JOB_SCORE_THRESHOLD: int = int(os.getenv("JOB_SCORE_THRESHOLD", "60"))
 
     # Phase 2: Job sources
@@ -15,8 +23,15 @@ class Settings:
     ADZUNA_APP_ID: str = os.getenv("ADZUNA_APP_ID", "")
     ADZUNA_APP_KEY: str = os.getenv("ADZUNA_APP_KEY", "")
 
-    # Database
-    DB_PATH: str = os.getenv("DB_PATH", "greenroom.db")
+    # Database — PostgreSQL everywhere (local dev + production)
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:yourpassword@localhost:5432/greenroom_dev"
+    )
+
+    # Render uses legacy "postgres://" prefix — SQLAlchemy needs "postgresql://"
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
     # Auth
     JWT_SECRET: str = os.getenv("JWT_SECRET", "change-me-in-production-please")

@@ -40,6 +40,7 @@ export default function Dashboard({ user, onLogout }) {
   const [scanProg, setScanProg] = useState('')
   const bsRef = useRef()
   const lastProgRef = useRef('')
+const lastFeedRef = useRef('')
   const feedKeys = useRef(new Set())
 
   useEffect(() => { load() }, [])
