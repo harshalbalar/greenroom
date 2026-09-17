@@ -39,6 +39,14 @@ class Settings:
     # Scan settings
     JOBS_PER_SOURCE: int = int(os.getenv("JOBS_PER_SOURCE", "10"))
 
+    # Phase 6C: Email (Resend)
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "Greenroom <onboarding@resend.dev>")
+
+    # Phase 6C: Scheduler
+    AUTO_SCAN_HOURS: int = int(os.getenv("AUTO_SCAN_HOURS", "6"))
+    MORNING_BRIEF_HOUR: int = int(os.getenv("MORNING_BRIEF_HOUR", "8"))  # UTC hour
+
     def validate(self) -> list[str]:
         """Return list of missing required keys."""
         missing = []

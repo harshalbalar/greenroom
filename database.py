@@ -4,7 +4,7 @@ Greenroom database — SQLAlchemy models + session management.
 PostgreSQL in production (Render), PostgreSQL locally for dev parity.
 Migrations handled by Alembic — never call create_all() in production.
 
-Models: User, Resume, Preference, Job, Application, BackgroundTask
+Models: User, Resume, Preference, Job, Application, BackgroundTask, Notification
 """
 
 import uuid
@@ -23,7 +23,7 @@ from config import settings
 
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,   # reconnect on stale connections (important for production)
+    pool_pre_ping=True,
     echo=False,
 )
 
@@ -63,9 +63,13 @@ class User(Base):
     name = Column(String, default="")
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
+    # Phase 6C: email notification opt-in (default on)
+    email_notifications = Column(Boolean, default=True)
+
     resumes = relationship("Resume", back_populates="user")
     preference = relationship("Preference", back_populates="user", uselist=False)
     applications = relationship("Application", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
 
 
 class Resume(Base):
@@ -114,11 +118,9 @@ class Job(Base):
     url = Column(String, default="")
     employment_type = Column(String, default="")
 
-    # Dates — proper DateTime, not strings
     posted_at = Column(DateTime(timezone=True), nullable=True)
     discovered_at = Column(DateTime(timezone=True), default=utcnow)
 
-    # Scoring
     overall_score = Column(Integer, nullable=True)
     skill_match = Column(Integer, nullable=True)
     experience_match = Column(Integer, nullable=True)
@@ -178,6 +180,27 @@ class BackgroundTask(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Notification(Base):
+    """In-app notifications for users (Phase 6C)."""
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True, default=new_id)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    type = Column(String, nullable=False)
+    # types: "new_jobs", "morning_brief", "app_ready", "app_status"
+    title = Column(String, nullable=False)
+    body = Column(Text, default="")
+    data = Column(JSON, default=dict)   # extra payload (job counts, top matches, etc.)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    user = relationship("User", back_populates="notifications")
+
+    __table_args__ = (
+        Index("idx_notif_user_read", "user_id", "is_read"),
+    )
 
 
 # ── Table creation (DEV ONLY — use Alembic in production) ─────────────

@@ -20,20 +20,24 @@ from routes import auth, resumes, preferences
 from routes import jobs_v2 as jobs
 from routes import applications_v2 as applications
 from routes import events
+from routes import notifications
+from scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create DB tables on startup."""
+    """Create DB tables on startup, start scheduler."""
     init_db()
-    print("  Greenroom API ready.")
+    start_scheduler()
+    print("  Greenroom API ready. Scheduler running.")
     yield
+    stop_scheduler()
 
 
 app = FastAPI(
     title="Greenroom API",
     description="Your applications, prepped and ready.",
-    version="0.5.0",
+    version="0.6.0",
     lifespan=lifespan,
 )
 
@@ -58,6 +62,7 @@ app.include_router(preferences.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(events.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health")
@@ -66,29 +71,21 @@ def health():
 
 
 # ── Serve React frontend in production ────────────────────────────────
-# If frontend/dist exists (i.e. the React app was built), serve it.
-# All non-API routes fall through to index.html (React Router handles them).
 
 FRONTEND_DIR = Path(__file__).parent / "frontend" / "dist"
 
 if FRONTEND_DIR.is_dir():
-    # Serve static assets (JS, CSS, images)
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="static")
 
-    # Catch-all: serve index.html for any non-API route (React Router)
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):
-        # Don't intercept API routes or docs
         if full_path.startswith("api/") or full_path in ("docs", "redoc", "openapi.json"):
-            return  # Let FastAPI handle it
-        # Serve the actual file if it exists (favicon.ico, etc.)
+            return
         file_path = FRONTEND_DIR / full_path
         if file_path.is_file():
             return FileResponse(file_path)
-        # Everything else → index.html (React Router takes over)
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
-    # No build yet — show API info on root
     @app.get("/")
     def root():
         return {
