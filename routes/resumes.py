@@ -1,6 +1,7 @@
-"""Resume routes — upload, parse, list, activate."""
+"""Resume routes — upload (file or text), parse, list, activate."""
 
-from fastapi import APIRouter, Depends, HTTPException
+import io
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from database import get_db, User, Resume, new_id
@@ -12,21 +13,57 @@ from state import PipelineState, JobDescription, UserPreferences, ParsedResume, 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 
-@router.post("", response_model=ResumeResponse, status_code=201)
-def upload_resume(
-    req: ResumeUploadRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Upload resume text, parse it with Gemini, and store both raw + parsed."""
-    # Deactivate any existing active resume
+def _extract_text_from_file(file: UploadFile) -> str:
+    """Extract text content from uploaded PDF, DOCX, or TXT file."""
+    content = file.file.read()
+    filename = (file.filename or "").lower()
+
+    if filename.endswith(".pdf"):
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                pages = [page.extract_text() or "" for page in pdf.pages]
+                return "\n\n".join(pages).strip()
+        except ImportError:
+            raise HTTPException(
+                status_code=500,
+                detail="PDF support not installed. Run: pip install pdfplumber"
+            )
+
+    elif filename.endswith(".docx"):
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(content))
+            return "\n".join(p.text for p in doc.paragraphs).strip()
+        except ImportError:
+            raise HTTPException(
+                status_code=500,
+                detail="DOCX support not installed. Run: pip install python-docx"
+            )
+
+    elif filename.endswith(".txt") or filename.endswith(".md"):
+        return content.decode("utf-8", errors="ignore").strip()
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {filename}. Upload PDF, DOCX, or TXT."
+        )
+
+
+def _parse_and_store(db: Session, user: User, raw_text: str, filename: str) -> Resume:
+    """Parse resume text with Gemini and store both raw + parsed."""
+    if len(raw_text.strip()) < 50:
+        raise HTTPException(status_code=400, detail="Resume text too short (minimum 50 characters)")
+
+    # Deactivate existing active resume
     db.query(Resume).filter(
         Resume.user_id == user.id, Resume.is_active == True
     ).update({"is_active": False})
 
-    # Parse resume using Phase 1 parser
+    # Parse with Gemini
     state: PipelineState = {
-        "resume_raw": req.raw_text,
+        "resume_raw": raw_text,
         "job": JobDescription(raw_text=""),
         "preferences": UserPreferences(),
         "parsed_resume": ParsedResume(),
@@ -44,30 +81,64 @@ def upload_resume(
     resume = Resume(
         id=new_id(),
         user_id=user.id,
-        raw_text=req.raw_text,
+        raw_text=raw_text,
         parsed_data=parsed.model_dump(),
-        filename=req.filename,
+        filename=filename,
         is_active=True,
     )
     db.add(resume)
     db.commit()
     db.refresh(resume)
+    return resume
 
+
+# ── Upload via JSON (existing — backward compatible) ──────────────────
+
+@router.post("", response_model=ResumeResponse, status_code=201)
+def upload_resume_text(
+    req: ResumeUploadRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload resume as raw text (original endpoint)."""
+    resume = _parse_and_store(db, user, req.raw_text, req.filename)
     return ResumeResponse(
-        id=resume.id,
-        filename=resume.filename,
-        is_active=resume.is_active,
-        parsed_data=resume.parsed_data,
-        created_at=resume.created_at,
+        id=resume.id, filename=resume.filename, is_active=resume.is_active,
+        parsed_data=resume.parsed_data, created_at=resume.created_at,
     )
 
+
+# ── Upload via file (new — PDF, DOCX, TXT) ───────────────────────────
+
+@router.post("/upload", response_model=ResumeResponse, status_code=201)
+def upload_resume_file(
+    file: UploadFile = File(..., description="PDF, DOCX, or TXT resume file"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a resume file (PDF, DOCX, or TXT). Extracts text and parses with Gemini."""
+    raw_text = _extract_text_from_file(file)
+
+    if not raw_text or len(raw_text.strip()) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract enough text from the file. Try pasting the text directly."
+        )
+
+    resume = _parse_and_store(db, user, raw_text, file.filename or "resume")
+    return ResumeResponse(
+        id=resume.id, filename=resume.filename, is_active=resume.is_active,
+        parsed_data=resume.parsed_data, created_at=resume.created_at,
+    )
+
+
+# ── List / Active / Activate (unchanged) ─────────────────────────────
 
 @router.get("", response_model=list[ResumeResponse])
 def list_resumes(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all resumes for the current user."""
     resumes = db.query(Resume).filter(Resume.user_id == user.id).order_by(Resume.created_at.desc()).all()
     return [
         ResumeResponse(
@@ -83,7 +154,6 @@ def get_active_resume(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get the user's currently active resume."""
     resume = db.query(Resume).filter(
         Resume.user_id == user.id, Resume.is_active == True
     ).first()
@@ -102,14 +172,12 @@ def activate_resume(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Set a specific resume as active (deactivates the current one)."""
     resume = db.query(Resume).filter(
         Resume.id == resume_id, Resume.user_id == user.id
     ).first()
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
 
-    # Deactivate all, then activate this one
     db.query(Resume).filter(Resume.user_id == user.id).update({"is_active": False})
     resume.is_active = True
     db.commit()

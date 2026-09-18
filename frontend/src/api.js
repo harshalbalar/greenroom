@@ -1,99 +1,82 @@
 const BASE = '/api'
 
-let token = localStorage.getItem('greenroom_token') || null
-
-export function setToken(t) {
-  token = t
-  if (t) localStorage.setItem('greenroom_token', t)
-  else localStorage.removeItem('greenroom_token')
-}
-
-export function getToken() {
-  return token
-}
-
-async function request(method, path, body = null) {
-  const headers = { 'Content-Type': 'application/json' }
+async function request(path, options = {}) {
+  const token = localStorage.getItem('token')
+  const headers = { ...(options.headers || {}) }
   if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const opts = { method, headers }
-  if (body) opts.body = JSON.stringify(body)
-
-  const res = await fetch(`${BASE}${path}`, opts)
-
-  if (res.status === 401) {
-    setToken(null)
-    window.location.href = '/login'
-    throw new Error('Unauthorized')
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
   }
-
+  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  if (res.status === 401) {
+    localStorage.removeItem('token')
+    window.location.reload()
+    throw new Error('Session expired')
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Request failed')
+  }
   if (res.status === 204) return null
-
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || 'Request failed')
-  return data
+  return res.json()
 }
 
-// Auth
 export const auth = {
   register: (email, password, name) =>
-    request('POST', '/auth/register', { email, password, name }),
-  login: (email, password) =>
-    request('POST', '/auth/login', { email, password }),
-  me: () => request('GET', '/auth/me'),
+    request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, name }) }),
+  login: async (email, password) => {
+    const data = await request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+    if (data.access_token) localStorage.setItem('token', data.access_token)
+    return data
+  },
+  me: () => request('/auth/me'),
+  logout: () => { localStorage.removeItem('token') },
+  updateProfile: (data) => request('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
 }
 
-// Resumes
 export const resumes = {
-  upload: (raw_text, filename) =>
-    request('POST', '/resumes', { raw_text, filename }),
-  list: () => request('GET', '/resumes'),
-  active: () => request('GET', '/resumes/active'),
+  upload: (raw_text, filename = 'resume.txt') =>
+    request('/resumes', { method: 'POST', body: JSON.stringify({ raw_text, filename }) }),
+  uploadFile: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request('/resumes/upload', { method: 'POST', body: formData })
+  },
+  list: () => request('/resumes'),
+  active: () => request('/resumes/active'),
+  activate: (id) => request(`/resumes/${id}/activate`, { method: 'PATCH' }),
 }
 
-// Preferences
 export const prefs = {
-  get: () => request('GET', '/preferences'),
-  save: (data) => request('PUT', '/preferences', data),
+  get: () => request('/preferences'),
+  save: (data) => request('/preferences', { method: 'PUT', body: JSON.stringify(data) }),
 }
 
-// Jobs
 export const jobs = {
-  scan: (score_results = false) =>
-    request('POST', '/jobs/scan', { score_results }),
-  list: (params = '') => request('GET', `/jobs${params ? '?' + params : ''}`),
-  get: (id) => request('GET', `/jobs/${id}`),
+  list: (query = '') => request(`/jobs?${query}`),
+  get: (id) => request(`/jobs/${id}`),
+  scan: (score = true) => request('/jobs/scan', { method: 'POST', body: JSON.stringify({ score_results: score }) }),
 }
 
-// Applications
 export const apps = {
-  create: (job_id, run_pipeline = true) =>
-    request('POST', '/applications', { job_id, run_pipeline }),
-  batch: (job_ids) =>
-    request('POST', '/applications/batch', { job_ids }),
-  list: (params = '') =>
-    request('GET', `/applications${params ? '?' + params : ''}`),
-  stats: () => request('GET', '/applications/stats'),
-  update: (id, data) => request('PATCH', `/applications/${id}`, data),
-  remove: (id) => request('DELETE', `/applications/${id}`),
+  list: () => request('/applications'),
+  create: (jobId, runPipeline = true) =>
+    request('/applications', { method: 'POST', body: JSON.stringify({ job_id: jobId, run_pipeline: runPipeline }) }),
+  get: (id) => request(`/applications/${id}`),
+  update: (id, data) => request(`/applications/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  stats: () => request('/applications/stats'),
 }
 
-// Task polling
 export const tasks = {
-  status: (taskId) =>
-    fetch(`${BASE}/events/${taskId}/status`).then(r => r.json()),
+  status: (id) => request(`/events/${id}/status`),
 }
 
-// SSE stream
-export function streamTask(taskId, onEvent) {
-  const source = new EventSource(`${BASE}/events/${taskId}`)
-  source.onmessage = (e) => {
-    const data = JSON.parse(e.data)
-    onEvent(data)
-    if (data.status === 'completed' || data.status === 'failed') {
-      source.close()
-    }
-  }
-  source.onerror = () => source.close()
-  return source
+export const notifications = {
+  list: (unreadOnly = false) => request(`/notifications?unread_only=${unreadOnly}`),
+  unreadCount: () => request('/notifications/unread-count'),
+  markRead: (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
 }
+
+export function setToken(t) { localStorage.setItem('token', t) }
+export function getToken() { return localStorage.getItem('token') }

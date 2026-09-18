@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { resumes, prefs } from '../api'
 
 const SAMPLE_RESUME = `SARAH CHEN
@@ -29,24 +29,36 @@ Python, JavaScript/TypeScript, React, FastAPI, Django, Node.js, PostgreSQL, Redi
 export default function SetupPanel({ onComplete }) {
   const [step, setStep] = useState(1)
   const [resumeText, setResumeText] = useState('')
-  const [roles, setRoles] = useState('Senior Software Engineer, Senior Backend Engineer')
-  const [locations, setLocations] = useState('Remote, San Francisco')
-  const [salaryMin, setSalaryMin] = useState('150000')
-  const [salaryMax, setSalaryMax] = useState('300000')
+  const [roles, setRoles] = useState('')
+  const [locations, setLocations] = useState('')
+  const [salaryMin, setSalaryMin] = useState('')
+  const [salaryMax, setSalaryMax] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [parsedName, setParsedName] = useState('')
   const [parsedSkills, setParsedSkills] = useState(0)
+  const [uploadedFile, setUploadedFile] = useState(null)
+  const fileInputRef = useRef()
 
   async function handleResumeUpload() {
-    if (!resumeText.trim() || resumeText.trim().length < 50) {
-      setError('Paste your resume text (at least 50 characters)')
-      return
-    }
     setLoading(true)
     setError('')
+
     try {
-      const res = await resumes.upload(resumeText, 'resume.txt')
+      let res
+
+      if (uploadedFile) {
+        // File upload path (PDF, DOCX, TXT)
+        res = await resumes.uploadFile(uploadedFile)
+      } else if (resumeText.trim() && resumeText.trim().length >= 50) {
+        // Text paste path (existing)
+        res = await resumes.upload(resumeText, 'resume.txt')
+      } else {
+        setError('Upload a file or paste your resume text (at least 50 characters)')
+        setLoading(false)
+        return
+      }
+
       const parsed = res.parsed_data || {}
       setParsedName(parsed.name || 'Unknown')
       setParsedSkills(parsed.skills?.length || 0)
@@ -56,6 +68,21 @@ export default function SetupPanel({ onComplete }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (!['pdf', 'docx', 'txt', 'doc'].includes(ext)) {
+      setError('Supported formats: PDF, DOCX, TXT')
+      return
+    }
+
+    setUploadedFile(file)
+    setResumeText('')  // clear text if they pick a file
+    setError('')
   }
 
   async function handleSavePrefs() {
@@ -96,16 +123,62 @@ export default function SetupPanel({ onComplete }) {
               First, let's get your resume. The crew needs it to find and prep your applications.
             </div>
 
-            <label>Paste your resume text</label>
+            {/* File upload */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${uploadedFile ? 'var(--purple)' : 'var(--border)'}`,
+                borderRadius: 10,
+                padding: '18px 16px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                marginBottom: 12,
+                background: uploadedFile ? 'rgba(123,108,246,0.06)' : 'transparent',
+                transition: 'all 0.2s',
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.doc"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+              {uploadedFile ? (
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--purple)' }}>
+                    📄 {uploadedFile.name}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                    Click to change file
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                    📄 Upload your resume
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                    PDF, DOCX, or TXT — click or drag
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginBottom: 12 }}>
+              — or paste text directly —
+            </div>
+
             <textarea
               value={resumeText}
-              onChange={e => { setResumeText(e.target.value); setError('') }}
+              onChange={e => { setResumeText(e.target.value); setUploadedFile(null); setError('') }}
               placeholder="Paste your full resume here..."
-              style={{ minHeight: 180, fontSize: 11, lineHeight: 1.5 }}
+              style={{ minHeight: 120, fontSize: 11, lineHeight: 1.5 }}
+              disabled={!!uploadedFile}
             />
 
             <button
-              onClick={() => setResumeText(SAMPLE_RESUME)}
+              onClick={() => { setResumeText(SAMPLE_RESUME); setUploadedFile(null) }}
               style={{
                 background: 'transparent', border: 'none', color: 'var(--purple)',
                 fontSize: 10, cursor: 'pointer', padding: '4px 0', marginBottom: 12,

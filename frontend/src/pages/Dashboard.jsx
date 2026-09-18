@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { jobs, apps, tasks, resumes, prefs } from '../api'
 import Backstage, { CREW } from '../components/Backstage'
 import SetupPanel from '../components/SetupPanel'
+import SettingsPanel from '../components/SettingsPanel'
 
 const COLORS = CREW.map(c => c.color)
 const NAMES = CREW.map(c => c.id)
@@ -9,13 +10,11 @@ const NAMES = CREW.map(c => c.id)
 function agentFor(msg) {
   if (!msg) return 0
   const m = msg.toLowerCase()
-  // Check crew name at start of message FIRST (backend sends "remy: ...", "scout: ...")
   if (m.startsWith('scout')) return 0
   if (m.startsWith('analyst')) return 1
   if (m.startsWith('remy')) return 2
   if (m.startsWith('taylor')) return 3
   if (m.startsWith('quinn')) return 4
-  // Fallback to keywords
   if (m.includes('scan') || m.includes('found')) return 0
   if (m.includes('scor')) return 1
   if (m.includes('research')) return 2
@@ -38,9 +37,11 @@ export default function Dashboard({ user, onLogout }) {
   const [hasPrefs, setHasPrefs] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
   const [scanProg, setScanProg] = useState('')
+  const [copied, setCopied] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
   const bsRef = useRef()
- const lastProgRef = useRef('')
-  const lastFeedRef = useRef('')  // you already added this
+  const lastProgRef = useRef('')
+  const lastFeedRef = useRef('')
   const feedKeys = useRef(new Set())
 
   useEffect(() => { load() }, [])
@@ -57,7 +58,6 @@ export default function Dashboard({ user, onLogout }) {
 
   function addFeed(agent, text) {
     let clean = text.replace(/^(scout|analyst|remy|taylor|quinn)[:\s]+/i, '')
-    // Use the feedKeys set to prevent ANY duplicate, not just consecutive
     if (feedKeys.current.has(clean)) return
     feedKeys.current.add(clean)
     setFeed(prev => [{
@@ -67,8 +67,34 @@ export default function Dashboard({ user, onLogout }) {
     }, ...prev].slice(0, 10))
   }
 
+  async function copyToClipboard(text, label) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(label)
+      setTimeout(() => setCopied(''), 2000)
+    } catch {}
+  }
+
+  function downloadDoc(appId, docType) {
+    const token = localStorage.getItem('token')
+    const url = `/api/applications/${appId}/download?doc_type=${docType}`
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => {
+        if (!res.ok) throw new Error('Download failed')
+        return res.blob()
+      })
+      .then(blob => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${docType}_${selJob?.company || 'document'}.docx`
+        a.click()
+        URL.revokeObjectURL(a.href)
+      })
+      .catch(e => console.error(e))
+  }
+
   function pickJob(j) { setSelJob(j); setSelAppId(null); setTab('resume') }
-  function pickApp(a) { setSelJob({ id: a.job_id, title: a.job_title, company: a.job_company }); setSelAppId(a.id); setTab('resume') }
+  function pickApp(a) { setSelJob({ id: a.job_id, title: a.job_title, company: a.job_company, url: a.job_url }); setSelAppId(a.id); setTab('resume') }
 
   const selApp = selAppId ? appList.find(a => a.id === selAppId) : selJob ? appList.find(a => a.job_id === selJob.id) : null
 
@@ -115,7 +141,6 @@ export default function Dashboard({ user, onLogout }) {
       const r = await apps.create(jobId, true); const tid = r.task_id
       if (!tid) { addFeed(0, r.message || 'error'); setPrepping(false); bsRef.current?.hideDoc(); return }
       await load()
-      let step = 0
       const p = setInterval(async () => {
         try {
           const s = await tasks.status(tid)
@@ -123,7 +148,7 @@ export default function Dashboard({ user, onLogout }) {
             lastProgRef.current = s.progress; const a = agentFor(s.progress)
             bsRef.current?.say(a, s.progress.slice(0,35), 2500)
             addFeed(a, s.progress)
-            bsRef.current?.moveDoc(a)  // move doc to the ACTIVE agent, not step counter
+            bsRef.current?.moveDoc(a)
           }
           if (s.status === 'completed') { clearInterval(p); bsRef.current?.hideDoc(); bsRef.current?.say(4, 'prepped and ready!', 3000); addFeed(4, `${job.company} application ready!`); setPrepping(false); lastProgRef.current = ''; await load() }
           if (s.status === 'failed') { clearInterval(p); bsRef.current?.hideDoc(); addFeed(0, 'prep failed'); setPrepping(false) }
@@ -160,7 +185,7 @@ export default function Dashboard({ user, onLogout }) {
           </button>
         </div>
         <div style={{ flex: 1 }} />
-        <div onClick={onLogout} title="Click to logout" style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #7B6CF6, #E966A0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{user.name?.slice(0,2).toUpperCase()}</div>
+        <div onClick={() => setShowSettings(true)} title="Settings" style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #7B6CF6, #E966A0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{user.name?.slice(0,2).toUpperCase()}</div>
       </div>
 
       {/* Content */}
@@ -213,8 +238,16 @@ export default function Dashboard({ user, onLogout }) {
                     <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
                     <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
                       {company}
+                      {!isApp && item.source && <span style={{ marginLeft: 6, opacity: 0.5 }}>via {item.source}</span>}
                       {isApp && item.status && !['queued','processing','ready'].includes(item.status) && <span style={{ marginLeft: 6, color: item.status === 'applied' ? '#5DCF5D' : item.status === 'interviewing' ? '#EF9F27' : item.status === 'rejected' ? '#E24B4A' : 'rgba(255,255,255,0.2)' }}>{item.status}</span>}
                     </div>
+                    {!isApp && item.url && (
+                      <a href={item.url} target="_blank" rel="noopener noreferrer"
+                         onClick={e => e.stopPropagation()}
+                         style={{ fontSize: 10, color: '#7B6CF6', textDecoration: 'none', marginTop: 3, display: 'inline-block' }}>
+                        Apply →
+                      </a>
+                    )}
                   </div>
                 )
               })}
@@ -227,7 +260,7 @@ export default function Dashboard({ user, onLogout }) {
           ))}
         </div>
 
-        {/* Detail panel - full width */}
+        {/* Detail panel */}
         {selJob && (
           <div style={{ padding: '0 20px 20px', animation: 'fadeIn 0.3s' }}>
             <div style={{ background: '#12102a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 24 }}>
@@ -237,11 +270,23 @@ export default function Dashboard({ user, onLogout }) {
                   <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>
                     {selJob.company}
                     {selApp?.score_data?.overall_score ? <span style={{ marginLeft: 8, color: '#7B6CF6', fontWeight: 600 }}>{selApp.score_data.overall_score}/100 match</span> : selJob.overall_score ? <span style={{ marginLeft: 8, color: '#1D9E75', fontWeight: 600 }}>{selJob.overall_score}/100 match</span> : ''}
+                    {selJob.source && <span style={{ marginLeft: 8, opacity: 0.4, fontSize: 12 }}>via {selJob.source}</span>}
                   </div>
+                  {selJob.url && (
+                    <a href={selJob.url} target="_blank" rel="noopener noreferrer"
+                       style={{ fontSize: 12, color: '#7B6CF6', textDecoration: 'none', marginTop: 6, display: 'inline-block' }}>
+                      🔗 View original posting →
+                    </a>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {!appList.some(a => a.job_id === selJob.id) && <button onClick={() => prep(selJob.id)} disabled={prepping} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #7B6CF6, #E966A0)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>✨ prep this job</button>}
-                  {selApp?.status === 'ready' && <button onClick={async () => { await apps.update(selApp.id, { status: 'applied' }); addFeed(4, 'marked applied!'); load() }} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #5DCF5D', background: 'transparent', color: '#5DCF5D', cursor: 'pointer', fontSize: 12 }}>mark applied</button>}
+                  {selApp?.status === 'ready' && (
+                    <>
+                      {selJob.url && <a href={selJob.url} target="_blank" rel="noopener noreferrer" style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #7B6CF6', background: 'transparent', color: '#7B6CF6', cursor: 'pointer', fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>apply now →</a>}
+                      <button onClick={async () => { await apps.update(selApp.id, { status: 'applied' }); addFeed(4, 'marked applied!'); load() }} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #5DCF5D', background: 'transparent', color: '#5DCF5D', cursor: 'pointer', fontSize: 12 }}>mark applied</button>
+                    </>
+                  )}
                   {selApp?.status === 'applied' && <button onClick={async () => { await apps.update(selApp.id, { status: 'interviewing' }); load() }} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #EF9F27', background: 'transparent', color: '#EF9F27', cursor: 'pointer', fontSize: 12 }}>got interview!</button>}
                   <button onClick={() => setSelJob(null)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 12 }}>✕</button>
                 </div>
@@ -251,6 +296,40 @@ export default function Dashboard({ user, onLogout }) {
                   <button key={key} onClick={() => setTab(key)} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: tab === key ? 600 : 400, cursor: 'pointer', transition: 'all 0.15s', background: tab === key ? 'linear-gradient(135deg, #7B6CF6, #E966A0)' : 'transparent', color: tab === key ? '#fff' : 'rgba(255,255,255,0.35)' }}>{label}</button>
                 ))}
               </div>
+
+              {/* Action bar — copy + download */}
+              {content(tab) && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => copyToClipboard(content(tab), tab)}
+                    style={{
+                      padding: '5px 12px', borderRadius: 6, fontSize: 11,
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: copied === tab ? 'rgba(93,207,93,0.15)' : 'transparent',
+                      color: copied === tab ? '#5DCF5D' : 'rgba(255,255,255,0.4)',
+                      cursor: 'pointer', transition: 'all 0.2s',
+                    }}
+                  >
+                    {copied === tab ? '✓ copied' : '📋 copy'}
+                  </button>
+                  {selApp && (tab === 'resume' || tab === 'letter') && (
+                    <button
+                      onClick={() => downloadDoc(selApp.id, tab === 'resume' ? 'resume' : 'cover_letter')}
+                      style={{
+                        padding: '5px 12px', borderRadius: 6, fontSize: 11,
+                        border: '1px solid rgba(123,108,246,0.3)',
+                        background: 'rgba(123,108,246,0.08)',
+                        color: '#7B6CF6',
+                        cursor: 'pointer', transition: 'all 0.2s',
+                      }}
+                    >
+                      📄 download .docx
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Content */}
               <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 20, minHeight: 200, maxHeight: 450, overflowY: 'auto', fontSize: 13, lineHeight: 1.8, color: 'rgba(255,255,255,0.55)', whiteSpace: 'pre-wrap' }}>
                 {content(tab) || (selApp ? '⏳ Content empty — Gemini was rate limited during prep. Enable billing at aistudio.google.com or wait for quota reset, then re-prep this job.' : 'Click "prep this job" to generate a tailored resume, cover letter, interview prep, and company research.')}
               </div>
@@ -276,6 +355,20 @@ export default function Dashboard({ user, onLogout }) {
 
       {showSetup && (!hasResume || !hasPrefs) && <SetupPanel onComplete={() => { setShowSetup(false); setHasResume(true); setHasPrefs(true); load() }} />}
 
+      {showSettings && (
+        <SettingsPanel
+          user={user}
+          onClose={() => setShowSettings(false)}
+          onUpdate={(updatedUser) => {
+            // refresh user data in parent
+            if (updatedUser) {
+              user.name = updatedUser.name
+              user.email = updatedUser.email
+            }
+            load()
+          }}
+        />
+      )}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }

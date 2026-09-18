@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { auth, setToken } from '../api'
 
-export default function Login({ onAuth }) {
-  const [mode, setMode] = useState('login')
+export default function Login({ onAuth, initialMode = 'login', onBack }) {
+  const [mode, setMode] = useState(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -35,6 +35,11 @@ export default function Login({ onAuth }) {
   return (
     <div className="login-page">
       <div className="login-card fade-in">
+        {onBack && (
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 12, marginBottom: 12, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+            ← back
+          </button>
+        )}
         <div className="login-title"><em>green</em>room</div>
         <div className="login-sub">your applications, prepped and ready</div>
 
@@ -44,7 +49,7 @@ export default function Login({ onAuth }) {
               <label>Name</label>
               <input
                 type="text"
-                placeholder="Sarah Chen"
+                placeholder="Your name"
                 value={name}
                 onChange={e => setName(e.target.value)}
               />

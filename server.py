@@ -21,6 +21,7 @@ from routes import jobs_v2 as jobs
 from routes import applications_v2 as applications
 from routes import events
 from routes import notifications
+from routes import downloads          
 from scheduler import start_scheduler, stop_scheduler
 
 
@@ -60,6 +61,7 @@ app.include_router(auth.router)
 app.include_router(resumes.router)
 app.include_router(preferences.router)
 app.include_router(jobs.router)
+app.include_router(downloads.router)      
 app.include_router(applications.router)
 app.include_router(events.router)
 app.include_router(notifications.router)
