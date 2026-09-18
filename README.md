@@ -2,148 +2,230 @@
 
 **Your applications, prepped and ready.**
 
-Greenroom is an AI-powered autonomous job application agent. Upload your resume, set your preferences, and Greenroom works for you — scanning job boards, scoring matches, tailoring your resume, writing personalized cover letters, researching companies, and generating interview prep. You stay in the loop: review everything before it goes out.
+Greenroom is an AI-powered autonomous job application agent. Upload your resume, set your preferences, and Greenroom works for you — scanning job boards, scoring matches, tailoring your resume, writing personalized cover letters, researching companies, and generating interview prep.
 
-> **The human stays in the loop.** Greenroom prepares everything and presents it for one-click approval. It does NOT auto-submit applications — that gets accounts banned and is unethical. The value is eliminating the 30 minutes of manual work PER application.
+> **The human stays in the loop.** Greenroom prepares everything and presents it for review. It does NOT auto-submit applications — the value is eliminating the 30+ minutes of manual work per application.
+
+🔗 **Live:** [greenroom-8wwb.onrender.com](https://greenroom-8wwb.onrender.com)
+
+---
 
 ## What It Does
 
-| Step | What Greenroom Does | Time Saved |
-|------|-------------------|------------|
-| **Job Discovery** | Scans Adzuna + JSearch (Google Jobs) for matches based on your preferences | Hours of browsing |
-| **Job Scoring** | Scores each match against your resume across 5 dimensions (skills, experience, location, salary, culture) | Manual filtering |
-| **Resume Tailoring** | Rewrites your resume to emphasize relevant experience for each specific job | 20+ min per app |
-| **Cover Letter** | Drafts a personalized letter referencing the company's actual recent news and products | 15+ min per app |
-| **Company Research** | Pulls real company data — funding, products, culture, recent news | 10+ min per app |
-| **Interview Prep** | Generates likely technical, behavioral, and company-specific questions with talking points | 30+ min per app |
-| **Application Tracking** | Tracks status: queued → ready → applied → interviewing → offered/rejected | Spreadsheet management |
+Upload your resume (PDF, DOCX, or text), set your target roles and locations, and Greenroom's crew takes over:
+
+| Agent | Role | What It Does |
+|-------|------|-------------|
+| **Scout** | Finder | Scans Adzuna + JSearch for jobs matching your preferences |
+| **Analyst** | Scorer | Scores each job against your resume across 5 dimensions |
+| **Remy** | Researcher | Pulls real company data — funding, products, culture, recent news |
+| **Taylor** | Tailor | Rewrites your resume to emphasize relevant experience for each job |
+| **Quinn** | Writer | Drafts personalized cover letters and generates interview prep |
+
+Every application gets a tailored resume, cover letter, company research brief, and interview prep — downloadable as ATS-friendly Word documents.
+
+---
+
+## Screenshots
+
+### Landing Page
+The public-facing page with pricing tiers, crew introduction, and feature overview.
+
+### Dashboard
+Dark-themed kanban board with real-time crew activity feed, job scoring, and one-click application prep.
+
+### Application Detail
+Tabbed view showing tailored resume, cover letter, interview prep, and company research with copy/download buttons.
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│              React Dashboard (Phase 5)           │
-└──────────────────────┬──────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│           React Dashboard + Landing Page             │
+│         (Vite, dark theme, kanban board)             │
+└──────────────────────┬──────────────────────────────┘
                        │ REST API
-┌──────────────────────▼──────────────────────────┐
-│              FastAPI Backend                      │
-│  Auth │ Resumes │ Preferences │ Jobs │ Tracker   │
-└──────────────────────┬──────────────────────────┘
+┌──────────────────────▼──────────────────────────────┐
+│                 FastAPI Backend                       │
+│  Auth │ Resumes │ Preferences │ Jobs │ Applications  │
+│  Notifications │ Downloads │ Scheduler               │
+└──────────────────────┬──────────────────────────────┘
                        │
-┌──────────────────────▼──────────────────────────┐
-│           LangGraph Agent Pipeline               │
-│                                                  │
-│  Parse Resume → Score Job → Research Company     │
-│  → Tailor Resume → Cover Letter → Interview Prep │
-└──────────────────────┬──────────────────────────┘
+┌──────────────────────▼──────────────────────────────┐
+│            LangGraph Agent Pipeline                   │
+│                                                      │
+│  Parse Resume → Score Job → Research Company         │
+│  → Tailor Resume → Cover Letter → Interview Prep     │
+└──────────────────────┬──────────────────────────────┘
                        │
-┌──────────────────────▼──────────────────────────┐
-│              SQLite (greenroom.db)                │
-│  Users │ Resumes │ Preferences │ Jobs │ Apps     │
-└─────────────────────────────────────────────────┘
+┌──────────────────────▼──────────────────────────────┐
+│         PostgreSQL (Render managed)                   │
+│  Users │ Resumes │ Preferences │ Jobs │ Apps         │
+│  Background Tasks │ Notifications                    │
+└─────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## Tech Stack
 
-- **LLM Engine:** Google Gemini (via langchain-google-genai)
-- **Agent Framework:** LangGraph (state machine with conditional edges)
-- **Web Search:** Tavily API (company research)
-- **Job Sources:** Adzuna API, JSearch/RapidAPI (Google Jobs)
-- **Backend:** FastAPI + SQLAlchemy + SQLite
-- **Auth:** JWT (python-jose) + bcrypt
-- **Frontend:** React (Phase 5 — coming soon)
+**Backend:** Python, FastAPI, SQLAlchemy, PostgreSQL, Alembic, APScheduler, Gunicorn
 
-## Quick Start
+**AI/ML:** Google Gemini (via LangChain), LangGraph (state machine pipeline), Tavily (web search)
+
+**Frontend:** React, Vite, CSS-in-JS (dark theme)
+
+**Job Sources:** Adzuna API, JSearch/RapidAPI (Google Jobs)
+
+**Email:** Resend (transactional emails, morning briefs)
+
+**Deployment:** Render (web service + managed PostgreSQL)
+
+---
+
+## Features
+
+**Core Pipeline**
+- AI-powered resume parsing (PDF, DOCX, TXT upload)
+- 5-dimension job scoring (skills, experience, location, salary, culture)
+- Company research with real-time web search via Tavily
+- Resume tailoring — rewrites to match each specific job
+- Personalized cover letters referencing actual company news
+- Interview prep with technical, behavioral, and company-specific questions
+
+**Job Discovery**
+- Multi-source scanning (Adzuna + JSearch)
+- Per-user job scoping with individual scoring
+- Deduplication across sources
+- Score-based filtering (worth applying / skip)
+
+**Dashboard**
+- Theater-themed dark UI with animated crew characters
+- Kanban board (In the Wings → In Rehearsal → Ready for Stage → On Stage)
+- Real-time crew activity feed during scanning and prep
+- Job detail panel with tabbed content view
+- Direct "Apply →" links to original job postings
+- Copy to clipboard + Word document download
+
+**User Management**
+- JWT authentication (register, login)
+- Settings panel (edit profile, re-upload resume, update preferences)
+- PDF/DOCX/TXT resume upload with Gemini parsing
+
+**Automation**
+- APScheduler for auto-scan (configurable interval, default 6 hours)
+- Daily morning brief (email + in-app notification)
+- New job alerts via email (Resend)
+- Background task processing with progress streaming
+
+**Downloads**
+- ATS-friendly Word documents (Calibri, clean formatting, proper sections)
+- Markdown-to-docx conversion (parses Gemini output into real Word styles)
+- Resume and cover letter downloads per application
+
+---
+
+## Quick Start (Local Development)
 
 ### Prerequisites
 
 - Python 3.12+
-- API keys (all free tiers):
-  - [Google Gemini](https://aistudio.google.com/apikey)
-  - [Tavily](https://tavily.com) (1,000 searches/month free)
-  - [Adzuna](https://developer.adzuna.com) (1,000 calls/month free)
-  - [JSearch via RapidAPI](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) (500 calls/month free, optional)
+- PostgreSQL 17+
+- Node.js 18+
+- API keys (all have free tiers):
+  - [Google Gemini](https://aistudio.google.com/apikey) — LLM engine
+  - [Tavily](https://tavily.com) — company research (1,000 searches/month free)
+  - [Adzuna](https://developer.adzuna.com) — job discovery (free tier)
+  - [JSearch via RapidAPI](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) — optional, Google Jobs
+  - [Resend](https://resend.com) — optional, email notifications (100/day free)
 
 ### Setup
 
 ```bash
+# Clone
 git clone https://github.com/harshalbalar/greenroom.git
 cd greenroom
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Configure API keys
+# Create PostgreSQL database
+psql -U postgres -c "CREATE DATABASE greenroom_dev;"
+
+# Configure environment
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys and database URL
 
-# Pin bcrypt for passlib compatibility
-pip install bcrypt==4.0.1
-```
+# Run database migrations
+alembic upgrade head
 
-### Run the Pipeline (Phase 1)
-
-Test the core agent pipeline with a sample resume + job:
-
-```bash
-python main.py
-```
-
-This takes one resume + one job description and produces a tailored resume, cover letter, company research brief, and interview prep.
-
-### Scan for Jobs (Phase 2)
-
-Discover and score real jobs from Adzuna:
-
-```bash
-python scan.py                # Scan + score matches
-python scan.py --no-score     # Discovery only (saves API calls)
-python scan.py --stats        # View database stats
-```
-
-### Start the API Server (Phase 3)
-
-```bash
+# Start the backend
 uvicorn server:app --reload --port 8000
+
+# In another terminal — start the frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-Then open http://localhost:8000/docs for the interactive Swagger UI.
+Open http://localhost:3000 — you'll see the landing page.
 
-**API flow:**
-1. `POST /api/auth/register` — create account
-2. `POST /api/resumes` — upload resume (auto-parsed by Gemini)
-3. `PUT /api/preferences` — set target roles, locations, salary
-4. `POST /api/jobs/scan` — discover jobs from all sources
-5. `GET /api/jobs?worth_only=true` — see top matches
-6. `POST /api/applications` — triggers full pipeline for a job
-7. `GET /api/applications` — review prepped applications
-8. `PATCH /api/applications/{id}` — update status (applied, interviewing, etc.)
+### Environment Variables
 
-### Run the Full E2E Test
+```env
+# Database
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/greenroom_dev
 
-```bash
-# With server running in another terminal:
-python test_api.py
+# AI
+GOOGLE_API_KEY=your_gemini_key
+GEMINI_MODEL=gemini-3.6-flash
+TAVILY_API_KEY=your_tavily_key
+
+# Job Sources
+ADZUNA_APP_ID=your_adzuna_id
+ADZUNA_APP_KEY=your_adzuna_key
+JSEARCH_API_KEY=your_jsearch_key  # optional
+
+# Auth
+JWT_SECRET=change-me-in-production
+
+# Email (optional)
+RESEND_API_KEY=your_resend_key
+FROM_EMAIL=Greenroom <onboarding@resend.dev>
+
+# Scheduler
+AUTO_SCAN_HOURS=6
+MORNING_BRIEF_HOUR=8
+
+# Scan settings
+JOBS_PER_SOURCE=10
 ```
+
+---
 
 ## Project Structure
 
 ```
 greenroom/
-├── main.py              # Phase 1 — test pipeline with sample data
-├── scan.py              # Phase 2 — CLI job scanner
-├── server.py            # Phase 3 — FastAPI server
-├── test_api.py          # End-to-end API test
-├── graph.py             # LangGraph pipeline wiring
-├── state.py             # Pydantic models + pipeline state
-├── prompts.py           # All LLM prompt templates
-├── config.py            # Settings + env vars
-├── database.py          # SQLAlchemy models
-├── auth_core.py         # JWT + bcrypt auth
-├── api_schemas.py       # API request/response schemas
-├── store.py             # Job store (SQLite)
-├── scanner.py           # Job discovery orchestrator
-├── utils.py             # Shared helpers
+├── server.py              # FastAPI server (serves API + React build)
+├── database.py            # SQLAlchemy models + PostgreSQL connection
+├── config.py              # Settings from environment variables
+├── auth_core.py           # JWT + bcrypt authentication
+├── api_schemas.py         # Pydantic request/response schemas
+├── graph.py               # LangGraph pipeline wiring
+├── state.py               # Pipeline state + Pydantic models
+├── prompts.py             # All LLM prompt templates
+├── store.py               # Job store (SQLAlchemy ORM)
+├── scanner.py             # Job discovery orchestrator
+├── worker.py              # Background task manager (ThreadPoolExecutor)
+├── tasks.py               # Task definitions (scan, prep, batch)
+├── scheduler.py           # APScheduler (auto-scan, morning brief)
+├── email_service.py       # Resend email templates
+├── utils.py               # Shared helpers
+├── render.yaml            # Render deployment config
+├── alembic/               # Database migrations
 ├── nodes/
 │   ├── resume_parser.py
 │   ├── job_scorer.py
@@ -152,26 +234,91 @@ greenroom/
 │   ├── cover_letter.py
 │   └── interview_prep.py
 ├── routes/
-│   ├── auth.py
-│   ├── resumes.py
-│   ├── preferences.py
-│   ├── jobs.py
-│   └── applications.py
-└── sources/
-    ├── base.py           # Job source interface
-    ├── jsearch.py        # JSearch (Google Jobs)
-    └── adzuna.py         # Adzuna API
+│   ├── auth.py            # Register, login, profile update
+│   ├── resumes.py         # Upload (file + text), parse, list
+│   ├── preferences.py     # Job search preferences
+│   ├── jobs_v2.py         # Scan, list, get (per-user scoped)
+│   ├── applications_v2.py # Create, list, update status
+│   ├── downloads.py       # Word document generation
+│   ├── notifications.py   # In-app notifications
+│   └── events.py          # SSE + task status polling
+├── sources/
+│   ├── base.py            # Job source interface
+│   ├── adzuna.py          # Adzuna API
+│   └── jsearch.py         # JSearch (Google Jobs)
+└── frontend/
+    ├── src/
+    │   ├── App.jsx            # Router (landing → login → dashboard)
+    │   ├── api.js             # API client
+    │   ├── pages/
+    │   │   ├── Landing.jsx    # Public landing page
+    │   │   ├── Login.jsx      # Auth form
+    │   │   └── Dashboard.jsx  # Main app (kanban, detail, crew feed)
+    │   └── components/
+    │       ├── Backstage.jsx  # Animated crew characters
+    │       ├── SetupPanel.jsx # Onboarding (resume + preferences)
+    │       └── SettingsPanel.jsx # Profile, resume, preferences editing
+    └── package.json
 ```
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create account |
+| POST | `/api/auth/login` | Login, get JWT token |
+| GET | `/api/auth/me` | Current user profile |
+| PATCH | `/api/auth/profile` | Update name/email |
+| POST | `/api/resumes` | Upload resume (text) |
+| POST | `/api/resumes/upload` | Upload resume (PDF/DOCX/TXT file) |
+| GET | `/api/resumes/active` | Get active resume |
+| PUT | `/api/preferences` | Save job search preferences |
+| GET | `/api/preferences` | Get preferences |
+| POST | `/api/jobs/scan` | Trigger job scan (background) |
+| GET | `/api/jobs` | List discovered jobs |
+| POST | `/api/applications` | Create application (triggers pipeline) |
+| GET | `/api/applications` | List applications |
+| PATCH | `/api/applications/{id}` | Update status |
+| GET | `/api/applications/{id}/download` | Download as Word doc |
+| GET | `/api/notifications` | List notifications |
+| POST | `/api/notifications/read-all` | Mark all read |
+| GET | `/api/events/{task_id}/status` | Poll task progress |
+
+---
+
+## Deployment
+
+Deployed on Render with a managed PostgreSQL database. Push to `main` triggers auto-deploy.
+
+```yaml
+# render.yaml handles:
+# - PostgreSQL database provisioning
+# - Python + Node.js build
+# - Alembic migrations
+# - Gunicorn with Uvicorn workers
+```
+
+The React frontend is built during deploy and served directly by FastAPI — single domain, no CORS issues.
+
+---
 
 ## Roadmap
 
 - [x] **Phase 1** — Core LangGraph pipeline (resume tailor, cover letter, research, interview prep)
-- [x] **Phase 2** — Job discovery (Adzuna + JSearch, scoring, SQLite storage)
-- [x] **Phase 3** — FastAPI backend, auth, user profiles, application tracking
-- [ ] **Phase 4** — Batch processing & background queues (Celery/Redis)
-- [ ] **Phase 5** — React dashboard (upload, review queue, kanban tracker)
-- [ ] **Phase 6** — Scheduling & automation (cron scanning, email notifications)
-- [ ] **Phase 7** — Deployment & monetization (Stripe payments, landing page)
+- [x] **Phase 2** — Job discovery (Adzuna + JSearch, scoring, deduplication)
+- [x] **Phase 3** — FastAPI backend, JWT auth, user profiles, application tracking
+- [x] **Phase 4** — Background workers, SSE progress streaming, batch processing
+- [x] **Phase 5** — React dashboard (kanban, crew characters, dark theme)
+- [x] **Phase 6A** — PostgreSQL migration + Alembic
+- [x] **Phase 6B** — Deployed to Render
+- [x] **Phase 6C** — Scheduling (auto-scan, morning brief, email notifications)
+- [x] **Phase 7A** — Landing page with pricing
+- [ ] **Phase 7B** — Stripe payments (Free/Pro/Unlimited tiers)
+- [ ] **Phase 7C** — Production hardening (Sentry, rate limiting, backups)
+
+---
 
 ## License
 
@@ -179,4 +326,4 @@ MIT
 
 ---
 
-*Built with LangGraph, Gemini, FastAPI, and too much coffee.*
+*Built with LangGraph, Gemini, FastAPI, React, and too much coffee.*
