@@ -11,7 +11,7 @@ Sign up: https://developer.adzuna.com
 import requests
 from config import settings
 from sources.base import BaseJobSource, DiscoveredJob
-
+ 
 
 # Adzuna uses country codes in the URL
 COUNTRY_MAP = {

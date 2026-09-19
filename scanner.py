@@ -44,6 +44,10 @@ def build_search_queries(preferences: UserPreferences) -> list[dict]:
                 "remote_only": is_remote and preferences.remote_preference == "remote",
             })
 
+    # Cap at 10 queries to avoid burning API limits
+    if len(queries) > 10:
+        queries = queries[:10]
+
     return queries
 
 

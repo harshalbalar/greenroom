@@ -48,6 +48,9 @@ class ParsedResume(BaseModel):
     education: list[Education] = Field(default_factory=list)
     projects: list[Project] = Field(default_factory=list)
     years_of_experience: int = 0
+    city: str = ""                                          # NEW
+    suggested_roles: list[str] = Field(default_factory=list) # NEW
+    nearby_cities: list[str] = Field(default_factory=list)   # NEW
 
 
 # ── User preferences ──────────────────────────────────────────────────

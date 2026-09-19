@@ -6,6 +6,7 @@ Design philosophy:
 - JSON prompts include the exact schema to reduce hallucinated fields.
 - Prose prompts include word counts to prevent rambling.
 - Every prompt reminds the LLM not to fabricate — this is someone's career.
+- Resume and cover letter include ATS + anti-AI-detection rules.
 """
 
 # ── Resume Parser ─────────────────────────────────────────────────────
@@ -17,6 +18,9 @@ RULES:
 - For skills, include both technical skills and tools/frameworks mentioned.
 - For experience, capture each role with its key accomplishments.
 - Estimate total years of experience from the work history dates.
+- For city, extract ONLY the city name (not street, not postal code).
+- For suggested_roles, suggest 3-5 realistic job titles based on the person's skills, experience level, and career trajectory.
+- For nearby_cities, suggest 3-4 cities that are within reasonable commuting distance or are major tech hubs near the person's location.
 
 RESUME:
 {resume_text}
@@ -52,7 +56,10 @@ Respond with ONLY valid JSON matching this schema (no markdown, no backticks):
             "technologies": ["tech1", "tech2"]
         }}
     ],
-    "years_of_experience": 0
+    "years_of_experience": 0,
+    "city": "just the city name, e.g. Braunschweig or San Francisco",
+    "suggested_roles": ["3-5 job titles this person should target"],
+    "nearby_cities": ["3-4 nearby cities or tech hubs within commuting distance"]
 }}"""
 
 
@@ -142,9 +149,9 @@ Respond with ONLY valid JSON (no markdown, no backticks):
 }}"""
 
 
-# ── Resume Tailor ─────────────────────────────────────────────────────
+# ── Resume Tailor (ATS + Humanized) ───────────────────────────────────
 
-TAILOR_RESUME = """You are an expert resume writer. Tailor this resume for a specific job application.
+TAILOR_RESUME = """You are a professional resume writer who creates ATS-optimized, human-sounding resumes.
 
 ORIGINAL RESUME:
 {resume_text}
@@ -159,27 +166,64 @@ Company: {job_company}
 Description:
 {job_text}
 
-TAILORING INSTRUCTIONS:
-1. REORDER bullet points so the most relevant accomplishments for THIS role appear first.
-2. ADJUST KEYWORDS to match the job description terminology (e.g., if they say "CI/CD" and the resume says "continuous deployment", use "CI/CD").
-3. EMPHASIZE projects and experience most relevant to this specific role.
-4. STRENGTHEN the summary/objective to target this exact position.
-5. KEEP all factual information identical — same companies, same dates, same achievements.
+ATS FORMATTING RULES (MANDATORY):
+Structure the resume EXACTLY in this order with these EXACT section headings:
+1. Candidate name (top, centered)
+2. One-line subtitle matching the target job title
+3. Contact line: email | phone | location | linkedin | github (pipe-separated)
+4. PROFESSIONAL PROFILE — 3-4 sentences as a paragraph, NOT a list
+5. TECHNICAL SKILLS — grouped by category (Languages:, Frameworks:, Databases:, Tools:)
+6. EXPERIENCE or PROJECTS — reverse chronological, each with bullet points
+7. EDUCATION — degree, institution, dates, relevant coursework
+8. LANGUAGES — if applicable
 
-CRITICAL RULES:
-- DO NOT fabricate experience, skills, or accomplishments.
-- DO NOT remove jobs or education — only reorder and re-emphasize.
-- DO NOT add skills the candidate does not have.
-- If the candidate is missing key skills, that's fine — a tailored resume highlights strengths, it doesn't lie.
-- Output should be in clean markdown format, ready to convert to PDF.
-- Keep it to 1 page worth of content (roughly 400-600 words).
+Format rules:
+- Use ONLY these standard section headings. No creative names.
+- NO tables, NO columns, NO text boxes, NO images, NO icons
+- Bullet points use simple dashes (-), not special symbols
+- Keep to 1 page of content (400-600 words)
+- Output in clean Markdown format
 
-Write the tailored resume now:"""
+ANTI-AI-DETECTION RULES (CRITICAL — the resume will be checked by AI detectors):
+
+1. VARY SENTENCE STARTS — NOT every bullet with a power verb. Mix these structures:
+   BAD: "Developed X. Implemented Y. Designed Z. Built A. Created B."
+   GOOD: "Built X from scratch. The Y system needed a rethink — redesigned it to handle Z. Took ownership of A."
+
+2. BE SPECIFIC, NOT INFLATED:
+   BAD: "Spearheaded the development of a cutting-edge data pipeline"
+   GOOD: "Built the data pipeline that processes 2M events/day"
+
+3. BANNED WORDS (never use any of these):
+   "Spearheaded", "Leveraged", "Orchestrated", "Facilitated", "Synergy",
+   "Cutting-edge", "State-of-the-art", "Best-in-class", "World-class",
+   "Passionate", "Self-starter", "Team player", "Go-getter", "Dynamic",
+   "Proven track record", "Results-driven", "Detail-oriented",
+   "Utilizing", "Impactful", "Innovative solutions"
+
+4. NATURAL LANGUAGE:
+   - Mix short bullets with longer ones (not all the same length)
+   - Use contractions occasionally in the profile section ("I've built" not "I have built")
+   - One bullet can start with context instead of a verb: "After the legacy system failed, rebuilt..."
+   - Include actual tech names and versions where relevant
+
+5. KEYWORD PLACEMENT:
+   - Mirror the job posting's exact terminology
+   - Place top keywords from the job description within the first third of the resume
+   - Weave keywords into bullet points naturally, not just the skills list
+
+CONTENT RULES:
+- REORDER bullets so the most relevant for THIS role come first
+- KEEP all facts identical — same companies, dates, achievements
+- DO NOT fabricate experience, skills, or accomplishments
+- DO NOT add skills the candidate does not have
+
+Write the ATS-optimized, human-sounding tailored resume now:"""
 
 
-# ── Cover Letter Writer ───────────────────────────────────────────────
+# ── Cover Letter Writer (Humanized) ──────────────────────────────────
 
-WRITE_COVER_LETTER = """You are an expert cover letter writer. Write a personalized cover letter.
+WRITE_COVER_LETTER = """You are writing a cover letter that sounds like a real person wrote it, not AI.
 
 CANDIDATE:
 Name: {candidate_name}
@@ -195,17 +239,42 @@ Key requirements from description:
 COMPANY RESEARCH:
 {company_research}
 
-COVER LETTER REQUIREMENTS:
-1. Opening paragraph: Show genuine knowledge of the company. Reference a specific recent development, product, or mission element from the research. Explain why THIS company excites you.
-2. Middle paragraph(s): Connect 2-3 of the candidate's strongest relevant experiences directly to the job requirements. Use specific accomplishments with numbers where available.
-3. Closing paragraph: Express enthusiasm, mention what you'd bring to the team, and include a call to action.
+STRUCTURE:
+1. Opening: Show you actually know this company. Reference ONE specific thing — a recent product, a news item, something you noticed. Why THIS company.
+2. Middle (1-2 paragraphs): Connect 2-3 of your strongest experiences to what the job needs. Use specific numbers and outcomes.
+3. Closing: What you'd bring in your first 90 days. Clear call to action.
 
-STYLE RULES:
-- Professional but conversational — not stiff or generic.
-- Under 350 words. Hiring managers skim.
-- No clichés: avoid "I am writing to express my interest", "passionate self-starter", "team player", "hit the ground running".
-- Do not start with "Dear Hiring Manager" — use "Dear [Company] team" or the specific team name if known.
-- DO NOT fabricate anything about the candidate. Only reference real experience from their resume.
+ANTI-AI-DETECTION RULES (CRITICAL — this will be checked by AI detectors):
+
+1. BANNED PHRASES (never use any of these):
+   "I am writing to express my interest", "passionate self-starter",
+   "team player", "hit the ground running", "leverage my skills",
+   "dynamic environment", "proven track record", "detail-oriented",
+   "I am excited about the opportunity", "I believe I would be a great fit",
+   "Furthermore", "Additionally", "Moreover", "In conclusion",
+   "I look forward to hearing from you", the word "passionate"
+
+2. NATURAL VOICE:
+   - Write like you're emailing a smart colleague, not writing a formal letter
+   - Vary paragraph lengths (short, then longer, then medium)
+   - Use contractions at least twice ("I've", "it's", "that's", "wasn't")
+   - Start one sentence mid-thought: "What stood out to me..." or "The part that grabbed me..."
+   - Include ONE moment of genuine opinion or personality
+
+3. AVOID PATTERNS:
+   - Don't start 2+ paragraphs the same way
+   - Don't use "Furthermore" / "Additionally" / "Moreover" — just start the next thought
+   - Don't end with "I look forward to hearing from you"
+   - Keep exclamation marks to zero
+   - No more than one em dash in the entire letter
+
+4. SPECIFICITY OVER FLATTERY:
+   BAD: "I admire your company's innovative approach to technology"
+   GOOD: "Your refurbished coffee machine program caught my eye — most competitors wouldn't take that risk"
+
+Under 300 words. Every sentence earns its place.
+Do not start with "Dear Hiring Manager" — use "Dear {job_company} team" or the specific team.
+DO NOT fabricate anything about the candidate.
 
 Write the cover letter now:"""
 
@@ -231,19 +300,19 @@ COMPANY CONTEXT:
 
 Generate an interview prep guide with these sections:
 
-## Likely technical questions (5-7 questions)
+## Likely Technical Questions (5-7 questions)
 Based on the job requirements and the candidate's background. Include a brief suggested talking point for each.
 
-## Behavioral questions (4-5 questions)
+## Behavioral Questions (4-5 questions)
 "Tell me about a time..." style questions tailored to what this role needs. Include which experience from the candidate's background to reference.
 
-## Company-specific questions (3-4 questions)
+## Company-Specific Questions (3-4 questions)
 Questions about the company's products, challenges, or recent developments that show the candidate did their homework.
 
-## Questions YOU should ask them (4-5 questions)
-Thoughtful questions that demonstrate genuine interest and help the candidate evaluate if this is the right fit. NOT generic questions like "what's the culture like" — specific ones based on the research.
+## Questions YOU Should Ask Them (4-5 questions)
+Thoughtful questions that demonstrate genuine interest and help the candidate evaluate fit. NOT generic questions — specific ones based on the research.
 
-## Key talking points to weave in
+## Key Talking Points to Weave In
 3-4 themes from the candidate's experience that should come up naturally regardless of what's asked.
 
 Format as clean markdown. Be specific — generic interview advice is worthless."""

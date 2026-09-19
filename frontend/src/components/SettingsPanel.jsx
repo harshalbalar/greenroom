@@ -171,6 +171,19 @@ export default function SettingsPanel({ user, onClose, onUpdate }) {
                 style={{ padding: '10px 0', borderRadius: 8, border: '1px solid rgba(239,100,73,0.3)', background: 'transparent', color: '#EF6449', cursor: 'pointer', fontSize: 12, marginTop: 8 }}>
                 Log out
               </button>
+              <button onClick={async () => {
+                if (window.confirm('This will permanently delete your account and all data. Are you sure?')) {
+                  if (window.confirm('This cannot be undone. Really delete everything?')) {
+                    try {
+                      await auth.deleteAccount()
+                      auth.logout()
+                      window.location.reload()
+                    } catch (e) { setError(e.message) }
+                  }
+                }
+              }} style={{ padding: '10px 0', borderRadius: 8, border: '1px solid rgba(239,100,73,0.5)', background: 'rgba(239,100,73,0.08)', color: '#EF6449', cursor: 'pointer', fontSize: 12, width: '100%' }}>
+                Delete account permanently
+              </button>
             </div>
           )}
 

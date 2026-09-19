@@ -60,9 +60,22 @@ export default function SetupPanel({ onComplete }) {
       }
 
       const parsed = res.parsed_data || {}
-      setParsedName(parsed.name || 'Unknown')
-      setParsedSkills(parsed.skills?.length || 0)
-      setStep(2)
+setParsedName(parsed.name || 'Unknown')
+setParsedSkills(parsed.skills?.length || 0)
+
+// Auto-fill from Gemini's suggestions
+if (parsed.suggested_roles?.length) {
+  setRoles(parsed.suggested_roles.join(', '))
+}
+if (parsed.city || parsed.nearby_cities?.length) {
+  const cities = []
+  if (parsed.city) cities.push(parsed.city)
+  if (parsed.nearby_cities?.length) cities.push(...parsed.nearby_cities)
+  cities.push('Remote')
+  setLocations([...new Set(cities)].join(', '))
+}
+
+setStep(2)
     } catch (e) {
       setError(e.message)
     } finally {

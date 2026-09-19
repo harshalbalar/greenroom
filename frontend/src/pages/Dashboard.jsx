@@ -86,7 +86,9 @@ export default function Dashboard({ user, onLogout }) {
       .then(blob => {
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
-        a.download = `${docType}_${selJob?.company || 'document'}.docx`
+        a.download = docType === 'bundle'
+          ? `Greenroom_${selJob?.company || 'Application'}.zip`
+          : `${docType}_${selJob?.company || 'document'}.docx`
         a.click()
         URL.revokeObjectURL(a.href)
       })
@@ -297,33 +299,23 @@ export default function Dashboard({ user, onLogout }) {
                 ))}
               </div>
 
-              {/* Action bar — copy + download */}
+              {/* Action bar — copy + download + bundle */}
               {content(tab) && (
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8, justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => copyToClipboard(content(tab), tab)}
-                    style={{
-                      padding: '5px 12px', borderRadius: 6, fontSize: 11,
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      background: copied === tab ? 'rgba(93,207,93,0.15)' : 'transparent',
-                      color: copied === tab ? '#5DCF5D' : 'rgba(255,255,255,0.4)',
-                      cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                  >
+                  <button onClick={() => copyToClipboard(content(tab), tab)}
+                    style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(255,255,255,0.1)', background: copied === tab ? 'rgba(93,207,93,0.15)' : 'transparent', color: copied === tab ? '#5DCF5D' : 'rgba(255,255,255,0.4)', cursor: 'pointer', transition: 'all 0.2s' }}>
                     {copied === tab ? '✓ copied' : '📋 copy'}
                   </button>
                   {selApp && (tab === 'resume' || tab === 'letter') && (
-                    <button
-                      onClick={() => downloadDoc(selApp.id, tab === 'resume' ? 'resume' : 'cover_letter')}
-                      style={{
-                        padding: '5px 12px', borderRadius: 6, fontSize: 11,
-                        border: '1px solid rgba(123,108,246,0.3)',
-                        background: 'rgba(123,108,246,0.08)',
-                        color: '#7B6CF6',
-                        cursor: 'pointer', transition: 'all 0.2s',
-                      }}
-                    >
+                    <button onClick={() => downloadDoc(selApp.id, tab === 'resume' ? 'resume' : 'cover_letter')}
+                      style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(123,108,246,0.3)', background: 'rgba(123,108,246,0.08)', color: '#7B6CF6', cursor: 'pointer', transition: 'all 0.2s' }}>
                       📄 download .docx
+                    </button>
+                  )}
+                  {selApp && (
+                    <button onClick={() => downloadDoc(selApp.id, 'bundle')}
+                      style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(233,102,160,0.3)', background: 'rgba(233,102,160,0.08)', color: '#E966A0', cursor: 'pointer', transition: 'all 0.2s' }}>
+                      📦 download all (.zip)
                     </button>
                   )}
                 </div>
@@ -360,7 +352,6 @@ export default function Dashboard({ user, onLogout }) {
           user={user}
           onClose={() => setShowSettings(false)}
           onUpdate={(updatedUser) => {
-            // refresh user data in parent
             if (updatedUser) {
               user.name = updatedUser.name
               user.email = updatedUser.email
@@ -369,6 +360,7 @@ export default function Dashboard({ user, onLogout }) {
           }}
         />
       )}
+
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }

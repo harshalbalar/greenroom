@@ -68,3 +68,22 @@ def update_profile(
     db.commit()
     db.refresh(user)
     return UserResponse(id=user.id, email=user.email, name=user.name, created_at=user.created_at)
+
+@router.delete("/account")
+def delete_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete the current user and all their data."""
+    from database import Resume, Preference, Application, Job, Notification, BackgroundTask
+
+    # Delete in order (foreign key constraints)
+    db.query(Notification).filter(Notification.user_id == user.id).delete()
+    db.query(Application).filter(Application.user_id == user.id).delete()
+    db.query(Job).filter(Job.user_id == user.id).delete()
+    db.query(Resume).filter(Resume.user_id == user.id).delete()
+    db.query(Preference).filter(Preference.user_id == user.id).delete()
+    db.query(User).filter(User.id == user.id).delete()
+    db.commit()
+
+    return {"status": "deleted"}

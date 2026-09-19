@@ -32,6 +32,7 @@ export const auth = {
   me: () => request('/auth/me'),
   logout: () => { localStorage.removeItem('token') },
   updateProfile: (data) => request('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccount: () => request('/auth/account', { method: 'DELETE' }),
 }
 
 export const resumes = {
