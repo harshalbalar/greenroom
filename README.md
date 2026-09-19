@@ -29,13 +29,13 @@ Every application gets a tailored resume, cover letter, company research brief, 
 ## Screenshots
 
 ### Landing Page
-The public-facing page with pricing tiers, crew introduction, and feature overview.
+![Landing](screenshots/landing.png)
 
 ### Dashboard
-Dark-themed kanban board with real-time crew activity feed, job scoring, and one-click application prep.
+![Dashboard](screenshots/dashboard.png)
 
 ### Application Detail
-Tabbed view showing tailored resume, cover letter, interview prep, and company research with copy/download buttons.
+![Detail](screenshots/detail.png)
 
 ---
 
