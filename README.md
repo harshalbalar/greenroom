@@ -12,9 +12,11 @@ Upload your resume, set your preferences, and 5 AI agents scan job boards, score
 
 ## Screenshots
 
-| Dashboard | Application Detail |
-|:-:|:-:|
-| ![Dashboard](screenshots/dashboard.png) | ![Detail](screenshots/detail.png) |
+### Dashboard — Kanban board with animated crew and real-time activity feed
+![Dashboard](screenshots/dashboard.png)
+
+### Application Detail — Tailored resume with template picker and download
+![Detail](screenshots/detail.png)
 
 ---
 
