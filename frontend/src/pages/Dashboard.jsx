@@ -7,6 +7,12 @@ import SettingsPanel from '../components/SettingsPanel'
 const COLORS = CREW.map(c => c.color)
 const NAMES = CREW.map(c => c.id)
 
+const TEMPLATES = [
+  { id: 'modern', name: 'Modern', desc: 'Calibri, blue accents — tech & startups', color: '#3B5998' },
+  { id: 'classic', name: 'Classic', desc: 'Georgia, traditional — banking & enterprise', color: '#8B6914' },
+  { id: 'minimal', name: 'Minimal', desc: 'Arial, clean whitespace — design & creative', color: '#888' },
+]
+
 function agentFor(msg) {
   if (!msg) return 0
   const m = msg.toLowerCase()
@@ -39,6 +45,8 @@ export default function Dashboard({ user, onLogout }) {
   const [scanProg, setScanProg] = useState('')
   const [copied, setCopied] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState('modern')
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const bsRef = useRef()
   const lastProgRef = useRef('')
   const lastFeedRef = useRef('')
@@ -77,7 +85,7 @@ export default function Dashboard({ user, onLogout }) {
 
   function downloadDoc(appId, docType) {
     const token = localStorage.getItem('token')
-    const url = `/api/applications/${appId}/download?doc_type=${docType}`
+    const url = `/api/applications/${appId}/download?doc_type=${docType}&template=${selectedTemplate}`
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => {
         if (!res.ok) throw new Error('Download failed')
@@ -173,6 +181,8 @@ export default function Dashboard({ user, onLogout }) {
     { n: statData.interviewing||0, l: 'interviews', c: '#F06449' },
   ]
 
+  const currentTpl = TEMPLATES.find(t => t.id === selectedTemplate)
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0a0a14', color: '#e8e6e0', fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13 }}>
       {/* Topbar */}
@@ -233,8 +243,7 @@ export default function Dashboard({ user, onLogout }) {
                   <div key={id} onClick={() => isApp ? pickApp(item) : pickJob(item)} style={{
                     background: selected ? `${col.color}15` : 'rgba(255,255,255,0.02)',
                     border: `1px solid ${selected ? col.color + '66' : 'rgba(255,255,255,0.04)'}`,
-                    borderRadius: 8, padding: '8px 10px', marginBottom: 6, cursor: 'pointer',
-                    transition: 'all 0.15s',
+                    borderRadius: 8, padding: '8px 10px', marginBottom: 6, cursor: 'pointer', transition: 'all 0.15s',
                   }}>
                     {!isApp && item.overall_score && <span style={{ float: 'right', fontSize: 10, padding: '1px 6px', borderRadius: 6, background: `${col.color}22`, color: col.color, fontWeight: 600 }}>{item.overall_score}</span>}
                     <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
@@ -244,11 +253,8 @@ export default function Dashboard({ user, onLogout }) {
                       {isApp && item.status && !['queued','processing','ready'].includes(item.status) && <span style={{ marginLeft: 6, color: item.status === 'applied' ? '#5DCF5D' : item.status === 'interviewing' ? '#EF9F27' : item.status === 'rejected' ? '#E24B4A' : 'rgba(255,255,255,0.2)' }}>{item.status}</span>}
                     </div>
                     {!isApp && item.url && (
-                      <a href={item.url} target="_blank" rel="noopener noreferrer"
-                         onClick={e => e.stopPropagation()}
-                         style={{ fontSize: 10, color: '#7B6CF6', textDecoration: 'none', marginTop: 3, display: 'inline-block' }}>
-                        Apply →
-                      </a>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                         style={{ fontSize: 10, color: '#7B6CF6', textDecoration: 'none', marginTop: 3, display: 'inline-block' }}>Apply →</a>
                     )}
                   </div>
                 )
@@ -276,9 +282,7 @@ export default function Dashboard({ user, onLogout }) {
                   </div>
                   {selJob.url && (
                     <a href={selJob.url} target="_blank" rel="noopener noreferrer"
-                       style={{ fontSize: 12, color: '#7B6CF6', textDecoration: 'none', marginTop: 6, display: 'inline-block' }}>
-                      🔗 View original posting →
-                    </a>
+                       style={{ fontSize: 12, color: '#7B6CF6', textDecoration: 'none', marginTop: 6, display: 'inline-block' }}>🔗 View original posting →</a>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -299,9 +303,39 @@ export default function Dashboard({ user, onLogout }) {
                 ))}
               </div>
 
-              {/* Action bar — copy + download + bundle */}
+              {/* Action bar */}
               {content(tab) && (
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8, justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* Template selector */}
+                  {selApp && (
+                    <div style={{ position: 'relative', marginRight: 'auto' }}>
+                      <button onClick={() => setShowTemplatePicker(!showTemplatePicker)}
+                        style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: currentTpl?.color || '#7B6CF6' }} />
+                        {currentTpl?.name || 'Modern'} template
+                        <span style={{ fontSize: 8, opacity: 0.5 }}>▼</span>
+                      </button>
+                      {showTemplatePicker && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#1a1830', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 6, zIndex: 50, width: 240, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                          {TEMPLATES.map(t => (
+                            <div key={t.id} onClick={() => { setSelectedTemplate(t.id); setShowTemplatePicker(false) }}
+                              style={{
+                                padding: '10px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+                                background: selectedTemplate === t.id ? 'rgba(123,108,246,0.12)' : 'transparent',
+                                border: selectedTemplate === t.id ? '1px solid rgba(123,108,246,0.3)' : '1px solid transparent',
+                              }}>
+                              <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 500, color: selectedTemplate === t.id ? '#e8e6e0' : 'rgba(255,255,255,0.5)' }}>{t.name}</div>
+                                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>{t.desc}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <button onClick={() => copyToClipboard(content(tab), tab)}
                     style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(255,255,255,0.1)', background: copied === tab ? 'rgba(93,207,93,0.15)' : 'transparent', color: copied === tab ? '#5DCF5D' : 'rgba(255,255,255,0.4)', cursor: 'pointer', transition: 'all 0.2s' }}>
                     {copied === tab ? '✓ copied' : '📋 copy'}
@@ -348,17 +382,8 @@ export default function Dashboard({ user, onLogout }) {
       {showSetup && (!hasResume || !hasPrefs) && <SetupPanel onComplete={() => { setShowSetup(false); setHasResume(true); setHasPrefs(true); load() }} />}
 
       {showSettings && (
-        <SettingsPanel
-          user={user}
-          onClose={() => setShowSettings(false)}
-          onUpdate={(updatedUser) => {
-            if (updatedUser) {
-              user.name = updatedUser.name
-              user.email = updatedUser.email
-            }
-            load()
-          }}
-        />
+        <SettingsPanel user={user} onClose={() => setShowSettings(false)}
+          onUpdate={(updatedUser) => { if (updatedUser) { user.name = updatedUser.name; user.email = updatedUser.email }; load() }} />
       )}
 
       <style>{`
