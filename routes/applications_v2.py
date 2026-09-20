@@ -1,7 +1,6 @@
-"""Application routes — create (async), batch, list, update, stats.
+"""Application routes — create (async), batch, list, update, delete, re-prep, stats.
 
 Phase 4: pipeline runs in background, returns task_id immediately.
-Batch endpoint processes multiple jobs in sequence.
 """
 
 from datetime import datetime, timezone
@@ -31,12 +30,7 @@ def create_application(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create an application for a job.
-
-    If run_pipeline=true, the pipeline runs in the background.
-    Returns a task_id to poll for progress.
-    If run_pipeline=false, creates the application immediately with status='queued'.
-    """
+    """Create an application for a job. If run_pipeline=true, runs in background."""
     job = db.query(Job).filter(Job.id == req.job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -48,18 +42,11 @@ def create_application(
         raise HTTPException(status_code=409, detail="Application already exists for this job")
 
     if not req.run_pipeline:
-        # Quick create without pipeline
-        app = Application(
-            id=new_id(),
-            user_id=user.id,
-            job_id=req.job_id,
-            status="queued",
-        )
+        app = Application(id=new_id(), user_id=user.id, job_id=req.job_id, status="queued")
         db.add(app)
         db.commit()
         return _to_response(app, job)
 
-    # Get active resume
     resume = db.query(Resume).filter(
         Resume.user_id == user.id, Resume.is_active == True
     ).first()
@@ -67,29 +54,12 @@ def create_application(
         raise HTTPException(status_code=400, detail="Upload a resume first")
 
     parsed_resume_dict = resume.parsed_data if resume.parsed_data else {}
+    job_dict = _job_to_dict(job)
 
-    job_dict = {
-        "raw_text": job.description or "",
-        "title": job.title,
-        "company": job.company,
-        "location": job.location or "",
-        "remote_type": job.remote_type or "",
-        "salary_range": job.salary_range or "",
-        "url": job.url or "",
-        "source": job.source,
-    }
-
-    # Create application in "processing" state NOW so it shows in "In Rehearsal"
-    app = Application(
-        id=new_id(),
-        user_id=user.id,
-        job_id=req.job_id,
-        status="processing",
-    )
+    app = Application(id=new_id(), user_id=user.id, job_id=req.job_id, status="processing")
     db.add(app)
     db.commit()
 
-    # Submit to background worker
     task_id = task_manager.submit(
         "process_application",
         task_process_application,
@@ -106,7 +76,63 @@ def create_application(
         "status": "processing",
         "job_title": job.title,
         "job_company": job.company,
-        "message": "Pipeline started. Poll /api/events/{task_id}/status for progress.",
+        "message": "Pipeline started.",
+    }
+
+
+@router.post("/{app_id}/reprep")
+def reprep_application(
+    app_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Re-run the pipeline for an existing application. Regenerates all content."""
+    app = db.query(Application).filter(
+        Application.id == app_id, Application.user_id == user.id
+    ).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    job = db.query(Job).filter(Job.id == app.job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    resume = db.query(Resume).filter(
+        Resume.user_id == user.id, Resume.is_active == True
+    ).first()
+    if not resume:
+        raise HTTPException(status_code=400, detail="Upload a resume first")
+
+    # Reset application content
+    app.status = "processing"
+    app.tailored_resume = ""
+    app.cover_letter = ""
+    app.interview_prep = ""
+    app.company_research = {}
+    app.score_data = {}
+    app.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    parsed_resume_dict = resume.parsed_data if resume.parsed_data else {}
+    job_dict = _job_to_dict(job)
+
+    task_id = task_manager.submit(
+        "process_application",
+        task_process_application,
+        user_id=user.id,
+        job_id=job.id,
+        app_id=app.id,
+        resume_raw=resume.raw_text,
+        parsed_resume_dict=parsed_resume_dict,
+        job_dict=job_dict,
+    )
+
+    return {
+        "task_id": task_id,
+        "status": "processing",
+        "job_title": job.title,
+        "job_company": job.company,
+        "message": "Re-prepping with fresh content.",
     }
 
 
@@ -116,11 +142,6 @@ def batch_process(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Process multiple jobs in one go. Runs sequentially in background.
-
-    Returns a task_id. Each job gets its own application entry
-    as it completes. Poll /api/events/{task_id}/status for progress.
-    """
     if len(req.job_ids) > 10:
         raise HTTPException(status_code=400, detail="Max 10 jobs per batch")
 
@@ -130,22 +151,20 @@ def batch_process(
     if not resume:
         raise HTTPException(status_code=400, detail="Upload a resume first")
 
-    parsed_resume_dict = resume.parsed_data if resume.parsed_data else {}
-
     task_id = task_manager.submit(
         "batch_process",
         task_batch_process,
         user_id=user.id,
         job_ids=req.job_ids,
         resume_raw=resume.raw_text,
-        parsed_resume_dict=parsed_resume_dict,
+        parsed_resume_dict=resume.parsed_data if resume.parsed_data else {},
     )
 
     return {
         "task_id": task_id,
         "status": "processing",
         "job_count": len(req.job_ids),
-        "message": f"Batch of {len(req.job_ids)} jobs queued. Poll /api/events/{task_id}/status.",
+        "message": f"Batch of {len(req.job_ids)} jobs queued.",
     }
 
 
@@ -161,7 +180,6 @@ def list_applications(
         query = query.filter(Application.status == status)
 
     apps = query.order_by(Application.created_at.desc()).limit(limit).all()
-
     results = []
     for app in apps:
         job = db.query(Job).filter(Job.id == app.job_id).first()
@@ -224,6 +242,7 @@ def delete_application(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Delete an application."""
     app = db.query(Application).filter(
         Application.id == app_id, Application.user_id == user.id
     ).first()
@@ -231,6 +250,19 @@ def delete_application(
         raise HTTPException(status_code=404, detail="Application not found")
     db.delete(app)
     db.commit()
+
+
+def _job_to_dict(job: Job) -> dict:
+    return {
+        "raw_text": job.description or "",
+        "title": job.title,
+        "company": job.company,
+        "location": job.location or "",
+        "remote_type": job.remote_type or "",
+        "salary_range": job.salary_range or "",
+        "url": job.url or "",
+        "source": job.source,
+    }
 
 
 def _to_response(app: Application, job: Job | None) -> ApplicationResponse:

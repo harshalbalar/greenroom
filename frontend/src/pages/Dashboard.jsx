@@ -294,6 +294,40 @@ export default function Dashboard({ user, onLogout }) {
                     </>
                   )}
                   {selApp?.status === 'applied' && <button onClick={async () => { await apps.update(selApp.id, { status: 'interviewing' }); load() }} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #EF9F27', background: 'transparent', color: '#EF9F27', cursor: 'pointer', fontSize: 12 }}>got interview!</button>}
+                  {/* Re-prep: regenerate content */}
+                  {selApp && selApp.status === 'ready' && (
+                    <button onClick={async () => {
+                      if (!window.confirm('Regenerate all content for this application?')) return
+                      const r = await apps.reprep(selApp.id)
+                      if (r.task_id) {
+                        addFeed(0, `re-prepping ${selJob.company}...`)
+                        // Poll like normal prep
+                        const p = setInterval(async () => {
+                          try {
+                            const s = await tasks.status(r.task_id)
+                            if (s.status === 'completed') { clearInterval(p); addFeed(4, 're-prep done!'); await load() }
+                            if (s.status === 'failed') { clearInterval(p); addFeed(0, 're-prep failed') }
+                          } catch {}
+                        }, 3000)
+                      }
+                    }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(123,108,246,0.3)', background: 'transparent', color: '#7B6CF6', cursor: 'pointer', fontSize: 11 }}>
+                      🔄 re-prep
+                    </button>
+                  )}
+ 
+                  {/* Delete application */}
+                  {selApp && (
+                    <button onClick={async () => {
+                      if (!window.confirm(`Delete ${selJob.title} application? This removes all prepped content.`)) return
+                      await apps.delete(selApp.id)
+                      addFeed(0, `deleted ${selJob.company} application`)
+                      setSelJob(null)
+                      setSelAppId(null)
+                      await load()
+                    }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(239,100,73,0.3)', background: 'transparent', color: '#EF6449', cursor: 'pointer', fontSize: 11 }}>
+                      🗑
+                    </button>
+                  )}
                   <button onClick={() => setSelJob(null)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 12 }}>✕</button>
                 </div>
               </div>

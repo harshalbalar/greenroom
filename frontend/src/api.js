@@ -65,6 +65,8 @@ export const apps = {
     request('/applications', { method: 'POST', body: JSON.stringify({ job_id: jobId, run_pipeline: runPipeline }) }),
   get: (id) => request(`/applications/${id}`),
   update: (id, data) => request(`/applications/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id) => request(`/applications/${id}`, { method: 'DELETE' }),
+  reprep: (id) => request(`/applications/${id}/reprep`, { method: 'POST' }),
   stats: () => request('/applications/stats'),
 }
 
