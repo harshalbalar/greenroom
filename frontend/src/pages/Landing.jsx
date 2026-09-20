@@ -1,39 +1,9 @@
-import { useState } from 'react'
-
 const CREW = [
   { emoji: '🔭', name: 'Scout', role: 'Scans job boards and finds matches based on your profile' },
   { emoji: '📊', name: 'Analyst', role: 'Scores every job against your resume across 5 dimensions' },
   { emoji: '🔍', name: 'Remy', role: 'Researches the company — funding, products, culture, news' },
   { emoji: '✂️', name: 'Taylor', role: 'Rewrites your resume to emphasize what each job needs' },
   { emoji: '✍️', name: 'Quinn', role: 'Writes personalized cover letters and interview prep' },
-]
-
-const TIERS = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: 'forever',
-    color: '#1D9E75',
-    features: ['5 applications/month', '1 scan/day', 'Resume tailoring', 'Cover letters', 'Interview prep'],
-    cta: 'Start free',
-  },
-  {
-    name: 'Pro',
-    price: '$12',
-    period: '/month',
-    color: '#7B6CF6',
-    popular: true,
-    features: ['50 applications/month', 'Auto-scan every 6 hours', 'Email notifications', 'Morning brief', 'Priority scoring'],
-    cta: 'Go Pro',
-  },
-  {
-    name: 'Unlimited',
-    price: '$29',
-    period: '/month',
-    color: '#E966A0',
-    features: ['Unlimited applications', 'All Pro features', 'Priority processing', 'API access', 'Early features'],
-    cta: 'Go Unlimited',
-  },
 ]
 
 export default function Landing({ onGetStarted }) {
@@ -59,7 +29,7 @@ export default function Landing({ onGetStarted }) {
       {/* Hero */}
       <section style={{ textAlign: 'center', padding: '80px 40px 60px', maxWidth: 800, margin: '0 auto' }}>
         <div style={{ display: 'inline-block', padding: '4px 14px', borderRadius: 20, background: 'rgba(123,108,246,0.12)', border: '1px solid rgba(123,108,246,0.2)', fontSize: 12, color: '#7B6CF6', marginBottom: 24 }}>
-          AI-powered job application agent
+          Open-source AI job application agent
         </div>
         <h1 style={{ fontSize: 52, fontWeight: 700, lineHeight: 1.1, margin: '0 0 20px', letterSpacing: -1 }}>
           Stop spending hours<br />on every application
@@ -70,14 +40,14 @@ export default function Landing({ onGetStarted }) {
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
           <button onClick={() => onGetStarted('register')} style={{ padding: '14px 32px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #7B6CF6, #E966A0)', color: '#fff', cursor: 'pointer', fontSize: 15, fontWeight: 600, transition: 'transform 0.2s' }}>
-            Start for free
+            Get started — it's free
           </button>
           <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} style={{ padding: '14px 32px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: '#e8e6e0', cursor: 'pointer', fontSize: 15 }}>
             See how it works
           </button>
         </div>
         <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginTop: 16 }}>
-          Free tier. No credit card required.
+          100% free. Open source on GitHub.
         </p>
       </section>
 
@@ -138,47 +108,35 @@ export default function Landing({ onGetStarted }) {
         ))}
       </section>
 
-      {/* Pricing */}
+      {/* Tech Stack */}
       <section style={{ maxWidth: 900, margin: '0 auto', padding: '0 40px 80px' }}>
         <h2 style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>
-          Pricing
+          Built with
         </h2>
         <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginBottom: 32 }}>
-          Start free. Upgrade when the crew proves its worth.
+          Open source. Self-hostable. No paid tiers — every feature is free.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-          {TIERS.map((t, i) => (
-            <div key={i} style={{
-              background: '#12102a',
-              border: t.popular ? `2px solid ${t.color}` : '1px solid rgba(255,255,255,0.06)',
-              borderRadius: 16, padding: '28px 24px',
-              position: 'relative', overflow: 'hidden',
-            }}>
-              {t.popular && (
-                <div style={{ position: 'absolute', top: 12, right: 12, fontSize: 10, padding: '3px 10px', borderRadius: 12, background: `${t.color}22`, color: t.color, fontWeight: 600 }}>
-                  Most popular
-                </div>
-              )}
-              <div style={{ fontSize: 18, fontWeight: 600, color: t.color, marginBottom: 4 }}>{t.name}</div>
-              <div style={{ marginBottom: 20 }}>
-                <span style={{ fontSize: 36, fontWeight: 700 }}>{t.price}</span>
-                <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginLeft: 2 }}>{t.period}</span>
-              </div>
-              {t.features.map((f, fi) => (
+          {[
+            { name: 'AI Pipeline', color: '#7B6CF6', items: ['Google Gemini 3.6 Flash', 'LangGraph state machine', 'Tavily web search', '6-node agent pipeline'] },
+            { name: 'Backend', color: '#1D9E75', items: ['Python + FastAPI', 'PostgreSQL + SQLAlchemy', 'APScheduler automation', 'Resend email notifications'] },
+            { name: 'Frontend', color: '#E966A0', items: ['React 18 + Vite', 'Theater-themed dark UI', 'Real-time crew activity', 'Kanban application board'] },
+          ].map((t, i) => (
+            <div key={i} style={{ background: '#12102a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '28px 24px' }}>
+              <div style={{ fontSize: 18, fontWeight: 600, color: t.color, marginBottom: 16 }}>{t.name}</div>
+              {t.items.map((f, fi) => (
                 <div key={fi} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
                   <div style={{ width: 16, height: 16, borderRadius: '50%', background: `${t.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: t.color, flexShrink: 0 }}>✓</div>
                   {f}
                 </div>
               ))}
-              <button onClick={() => onGetStarted('register')} style={{
-                width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500, marginTop: 20,
-                background: t.popular ? `linear-gradient(135deg, ${t.color}, #E966A0)` : 'rgba(255,255,255,0.06)',
-                color: t.popular ? '#fff' : 'rgba(255,255,255,0.5)',
-              }}>
-                {t.cta}
-              </button>
             </div>
           ))}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 24 }}>
+          <a href="https://github.com/harshalbalar/greenroom" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>
+            ⭐ Star on GitHub
+          </a>
         </div>
       </section>
 
