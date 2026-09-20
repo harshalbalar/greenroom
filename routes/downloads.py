@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from docx.shared import Pt, Inches, RGBColor
 
-from database import get_db, User, Application, Job
+from database import get_db, User, Application, Job, Resume
 from auth_core import get_current_user
 from resume_templates import build_resume_from_template, TEMPLATES, parse_resume_markdown, _add_inline_formatting
 
@@ -21,7 +21,12 @@ router = APIRouter(prefix="/api/applications", tags=["downloads"])
 def list_templates():
     """List available resume templates."""
     return [
-        {"id": k, "name": v["name"], "description": v["desc"]}
+        {
+            "id": k,
+            "name": v["name"],
+            "description": v["desc"],
+            "requires_original": k == "user_template",
+        }
         for k, v in TEMPLATES.items()
     ]
 
@@ -194,7 +199,22 @@ def download_application(
     if doc_type == "resume":
         if not app.tailored_resume:
             raise HTTPException(status_code=400, detail="No tailored resume available")
-        buffer = build_resume_from_template(app.tailored_resume, template)
+
+        # For "My Template", fetch the user's original DOCX bytes
+        original_file = None
+        if template == "user_template":
+            active_resume = db.query(Resume).filter(
+                Resume.user_id == user.id, Resume.is_active == True
+            ).first()
+            if active_resume and active_resume.original_file:
+                original_file = active_resume.original_file
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="My Template requires a DOCX resume upload. Upload your resume as a .docx file first."
+                )
+
+        buffer = build_resume_from_template(app.tailored_resume, template, original_file=original_file)
         filename = f"Resume_{safe_company}.docx"
         mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -215,10 +235,19 @@ def download_application(
         mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     elif doc_type == "bundle":
+        # For bundle with user_template, fetch original file once
+        original_file = None
+        if template == "user_template":
+            active_resume = db.query(Resume).filter(
+                Resume.user_id == user.id, Resume.is_active == True
+            ).first()
+            if active_resume and active_resume.original_file:
+                original_file = active_resume.original_file
+
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
             if app.tailored_resume:
-                buf = build_resume_from_template(app.tailored_resume, template)
+                buf = build_resume_from_template(app.tailored_resume, template, original_file=original_file)
                 zf.writestr(f"Resume_{safe_company}.docx", buf.read())
             if app.cover_letter:
                 buf = _build_cover_letter_docx(app.cover_letter)

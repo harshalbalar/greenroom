@@ -11,6 +11,7 @@ const TEMPLATES = [
   { id: 'modern', name: 'Modern', desc: 'Calibri, blue accents — tech & startups', color: '#3B5998' },
   { id: 'classic', name: 'Classic', desc: 'Georgia, traditional — banking & enterprise', color: '#8B6914' },
   { id: 'minimal', name: 'Minimal', desc: 'Arial, clean whitespace — design & creative', color: '#888' },
+  { id: 'user_template', name: 'My Template', desc: 'Your original DOCX format — exact fonts & layout', color: '#0F5257', requiresOriginal: true },
 ]
 
 function agentFor(msg) {
@@ -40,6 +41,7 @@ export default function Dashboard({ user, onLogout }) {
   const [scanning, setScanning] = useState(false)
   const [prepping, setPrepping] = useState(false)
   const [hasResume, setHasResume] = useState(false)
+  const [hasOriginalFile, setHasOriginalFile] = useState(false)
   const [hasPrefs, setHasPrefs] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
   const [scanProg, setScanProg] = useState('')
@@ -58,7 +60,11 @@ export default function Dashboard({ user, onLogout }) {
     try {
       const [j, a, s] = await Promise.all([jobs.list('limit=50').catch(() => []), apps.list().catch(() => []), apps.stats().catch(() => ({}))])
       setJobList(j); setAppList(a); setStatData(s)
-      try { await resumes.active(); setHasResume(true) } catch { setHasResume(false) }
+      try {
+        const activeResume = await resumes.active()
+        setHasResume(true)
+        setHasOriginalFile(activeResume?.has_original_file || false)
+      } catch { setHasResume(false); setHasOriginalFile(false) }
       try { await prefs.get(); setHasPrefs(true) } catch { setHasPrefs(false) }
       setShowSetup(true)
     } catch {}
@@ -181,7 +187,9 @@ export default function Dashboard({ user, onLogout }) {
     { n: statData.interviewing||0, l: 'interviews', c: '#F06449' },
   ]
 
-  const currentTpl = TEMPLATES.find(t => t.id === selectedTemplate)
+  // Only show "My Template" if user uploaded a DOCX
+  const availableTemplates = TEMPLATES.filter(t => !t.requiresOriginal || hasOriginalFile)
+  const currentTpl = availableTemplates.find(t => t.id === selectedTemplate) || availableTemplates[0]
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0a0a14', color: '#e8e6e0', fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13 }}>
@@ -350,8 +358,8 @@ export default function Dashboard({ user, onLogout }) {
                         <span style={{ fontSize: 8, opacity: 0.5 }}>▼</span>
                       </button>
                       {showTemplatePicker && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#1a1830', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 6, zIndex: 50, width: 240, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-                          {TEMPLATES.map(t => (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#1a1830', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 6, zIndex: 50, width: 260, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                          {availableTemplates.map(t => (
                             <div key={t.id} onClick={() => { setSelectedTemplate(t.id); setShowTemplatePicker(false) }}
                               style={{
                                 padding: '10px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
@@ -360,7 +368,9 @@ export default function Dashboard({ user, onLogout }) {
                               }}>
                               <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
                               <div>
-                                <div style={{ fontSize: 12, fontWeight: 500, color: selectedTemplate === t.id ? '#e8e6e0' : 'rgba(255,255,255,0.5)' }}>{t.name}</div>
+                                <div style={{ fontSize: 12, fontWeight: 500, color: selectedTemplate === t.id ? '#e8e6e0' : 'rgba(255,255,255,0.5)' }}>
+                                  {t.id === 'user_template' ? '⭐ ' : ''}{t.name}
+                                </div>
                                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>{t.desc}</div>
                               </div>
                             </div>

@@ -410,11 +410,26 @@ TEMPLATES = {
     "classic": {"name": "Classic", "desc": "Traditional, serif font, double borders — banking, law, enterprise", "builder": build_classic},
     "modern": {"name": "Modern", "desc": "Clean Calibri, blue accents, thin dividers — tech, startups", "builder": build_modern},
     "minimal": {"name": "Minimal", "desc": "Ultra-clean, lots of whitespace, no borders — design, creative", "builder": build_minimal},
+    "user_template": {"name": "My Template", "desc": "Your original DOCX format with tailored content", "builder": None},  # handled separately
 }
 
 
-def build_resume_from_template(markdown: str, template: str = "modern") -> io.BytesIO:
-    """Parse Markdown resume and build DOCX using the selected template."""
+def build_resume_from_template(markdown: str, template: str = "modern", original_file: bytes | None = None) -> io.BytesIO:
+    """Parse Markdown resume and build DOCX using the selected template.
+
+    Args:
+        markdown: Gemini's tailored resume in Markdown format
+        template: Template ID ('classic', 'modern', 'minimal', or 'user_template')
+        original_file: Raw DOCX bytes for user_template mode. Required when template='user_template'.
+    """
+    if template == "user_template":
+        if not original_file:
+            # Fallback to modern if no original file available
+            template = "modern"
+        else:
+            from user_template import build_user_template
+            return build_user_template(markdown, original_file)
+
     sections = parse_resume_markdown(markdown)
     builder = TEMPLATES.get(template, TEMPLATES["modern"])["builder"]
     return builder(sections)

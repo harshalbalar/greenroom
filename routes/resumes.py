@@ -13,8 +13,12 @@ from state import PipelineState, JobDescription, UserPreferences, ParsedResume, 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 
-def _extract_text_from_file(file: UploadFile) -> str:
-    """Extract text content from uploaded PDF, DOCX, or TXT file."""
+def _extract_text_from_file(file: UploadFile) -> tuple[str, bytes | None]:
+    """Extract text content from uploaded PDF, DOCX, or TXT file.
+
+    Returns (extracted_text, original_bytes_or_None).
+    original_bytes is only set for DOCX files (used by "My Template" feature).
+    """
     content = file.file.read()
     filename = (file.filename or "").lower()
 
@@ -23,7 +27,7 @@ def _extract_text_from_file(file: UploadFile) -> str:
             import pdfplumber
             with pdfplumber.open(io.BytesIO(content)) as pdf:
                 pages = [page.extract_text() or "" for page in pdf.pages]
-                return "\n\n".join(pages).strip()
+                return "\n\n".join(pages).strip(), None
         except ImportError:
             raise HTTPException(
                 status_code=500,
@@ -34,7 +38,8 @@ def _extract_text_from_file(file: UploadFile) -> str:
         try:
             import docx
             doc = docx.Document(io.BytesIO(content))
-            return "\n".join(p.text for p in doc.paragraphs).strip()
+            text = "\n".join(p.text for p in doc.paragraphs).strip()
+            return text, content  # Return original DOCX bytes for "My Template"
         except ImportError:
             raise HTTPException(
                 status_code=500,
@@ -42,7 +47,7 @@ def _extract_text_from_file(file: UploadFile) -> str:
             )
 
     elif filename.endswith(".txt") or filename.endswith(".md"):
-        return content.decode("utf-8", errors="ignore").strip()
+        return content.decode("utf-8", errors="ignore").strip(), None
 
     else:
         raise HTTPException(
@@ -51,8 +56,13 @@ def _extract_text_from_file(file: UploadFile) -> str:
         )
 
 
-def _parse_and_store(db: Session, user: User, raw_text: str, filename: str) -> Resume:
-    """Parse resume text with Gemini and store both raw + parsed."""
+def _parse_and_store(db: Session, user: User, raw_text: str, filename: str, original_file: bytes | None = None) -> Resume:
+    """Parse resume text with Gemini and store both raw + parsed.
+
+    Args:
+        original_file: Raw bytes of the uploaded DOCX (if applicable).
+                       Stored for the "My Template" feature.
+    """
     if len(raw_text.strip()) < 50:
         raise HTTPException(status_code=400, detail="Resume text too short (minimum 50 characters)")
 
@@ -85,6 +95,7 @@ def _parse_and_store(db: Session, user: User, raw_text: str, filename: str) -> R
         parsed_data=parsed.model_dump(),
         filename=filename,
         is_active=True,
+        original_file=original_file,
     )
     db.add(resume)
     db.commit()
@@ -104,7 +115,8 @@ def upload_resume_text(
     resume = _parse_and_store(db, user, req.raw_text, req.filename)
     return ResumeResponse(
         id=resume.id, filename=resume.filename, is_active=resume.is_active,
-        parsed_data=resume.parsed_data, created_at=resume.created_at,
+        parsed_data=resume.parsed_data, has_original_file=resume.original_file is not None,
+        created_at=resume.created_at,
     )
 
 
@@ -116,8 +128,12 @@ def upload_resume_file(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload a resume file (PDF, DOCX, or TXT). Extracts text and parses with Gemini."""
-    raw_text = _extract_text_from_file(file)
+    """Upload a resume file (PDF, DOCX, or TXT). Extracts text and parses with Gemini.
+
+    For DOCX files, the original file bytes are stored so the user can
+    later download tailored resumes using their own formatting ("My Template").
+    """
+    raw_text, original_bytes = _extract_text_from_file(file)
 
     if not raw_text or len(raw_text.strip()) < 50:
         raise HTTPException(
@@ -125,10 +141,11 @@ def upload_resume_file(
             detail="Could not extract enough text from the file. Try pasting the text directly."
         )
 
-    resume = _parse_and_store(db, user, raw_text, file.filename or "resume")
+    resume = _parse_and_store(db, user, raw_text, file.filename or "resume", original_file=original_bytes)
     return ResumeResponse(
         id=resume.id, filename=resume.filename, is_active=resume.is_active,
-        parsed_data=resume.parsed_data, created_at=resume.created_at,
+        parsed_data=resume.parsed_data, has_original_file=resume.original_file is not None,
+        created_at=resume.created_at,
     )
 
 
@@ -143,7 +160,8 @@ def list_resumes(
     return [
         ResumeResponse(
             id=r.id, filename=r.filename, is_active=r.is_active,
-            parsed_data=r.parsed_data or {}, created_at=r.created_at,
+            parsed_data=r.parsed_data or {}, has_original_file=r.original_file is not None,
+            created_at=r.created_at,
         )
         for r in resumes
     ]
@@ -162,7 +180,8 @@ def get_active_resume(
 
     return ResumeResponse(
         id=resume.id, filename=resume.filename, is_active=resume.is_active,
-        parsed_data=resume.parsed_data or {}, created_at=resume.created_at,
+        parsed_data=resume.parsed_data or {}, has_original_file=resume.original_file is not None,
+        created_at=resume.created_at,
     )
 
 
@@ -185,5 +204,6 @@ def activate_resume(
 
     return ResumeResponse(
         id=resume.id, filename=resume.filename, is_active=resume.is_active,
-        parsed_data=resume.parsed_data or {}, created_at=resume.created_at,
+        parsed_data=resume.parsed_data or {}, has_original_file=resume.original_file is not None,
+        created_at=resume.created_at,
     )

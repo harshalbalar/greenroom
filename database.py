@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     create_engine, Column, String, Integer, Boolean, Text, DateTime, Float,
-    ForeignKey, Index, JSON,
+    ForeignKey, Index, JSON, LargeBinary,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
@@ -79,6 +79,7 @@ class Resume(Base):
     parsed_data = Column(JSON, default=dict)
     filename = Column(String, default="")
     is_active = Column(Boolean, default=True)
+    original_file = Column(LargeBinary, nullable=True)  # raw DOCX bytes for "My Template"
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     user = relationship("User", back_populates="resumes")

@@ -1,4 +1,3 @@
-
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -31,6 +30,7 @@ class ResumeResponse(BaseModel):
     filename: str
     is_active: bool
     parsed_data: dict = {}
+    has_original_file: bool = False  # True when DOCX was uploaded → "My Template" available
     created_at: datetime | None = None
 
 class PreferenceRequest(BaseModel):
