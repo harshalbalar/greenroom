@@ -23,7 +23,7 @@ from api_schemas import (
 )
 from state import (
     PipelineState, JobDescription, UserPreferences,
-    ParsedResume, JobScore, CompanyResearch,
+    ParsedResume, JobScore, CompanyResearch, TriageResult,
 )
 from graph import pipeline as greenroom_pipeline
 
@@ -81,6 +81,7 @@ def create_application(
             ),
             "preferences": UserPreferences(),
             "parsed_resume": parsed_resume,
+            "triage": TriageResult(),
             "score": JobScore(),
             "company_research": CompanyResearch(),
             "tailored_resume": "",

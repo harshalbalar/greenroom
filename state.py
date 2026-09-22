@@ -121,6 +121,21 @@ class CompanyResearch(BaseModel):
     interview_insights: str = ""
 
 
+# ── Job triage (Jev decision model — fast pre-filter) ────────────────
+
+class TriageResult(BaseModel):
+    """Result from Jev's typed decision on job relevance.
+
+    This runs in ~150ms (vs ~30s for Gemini scoring) and costs
+    $0.042/M input tokens. Used to skip irrelevant jobs before
+    the expensive Gemini pipeline fires.
+    """
+    relevance: str = "maybe"       # high_fit | maybe | skip
+    confidence: float = 0.0        # Jev's calibrated confidence (0-1)
+    probabilities: dict = Field(default_factory=dict)  # per-option probabilities
+    skipped: bool = False          # True if triage decided to skip
+
+
 # ── Main pipeline state ───────────────────────────────────────────────
 
 class PipelineState(TypedDict):
@@ -128,6 +143,9 @@ class PipelineState(TypedDict):
     resume_raw: str                    # Original resume text
     job: JobDescription                # Job posting
     preferences: UserPreferences       # User's targeting criteria
+
+    # ── Triage (fast pre-filter via Jev) ──
+    triage: TriageResult               # Jev decision: high_fit / maybe / skip
 
     # ── Intermediate (built by nodes) ──
     parsed_resume: ParsedResume        # Structured resume from parser

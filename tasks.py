@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from worker import task_manager
 from state import (
     PipelineState, JobDescription, UserPreferences,
-    ParsedResume, JobScore, CompanyResearch,
+    ParsedResume, JobScore, CompanyResearch, TriageResult,
 )
 from nodes.resume_parser import parse_resume as _parse
 from nodes.job_scorer import score_job as _score
@@ -80,6 +80,7 @@ def task_process_application(
         "job": JobDescription(**job_dict),
         "preferences": UserPreferences(),
         "parsed_resume": parsed_resume,
+        "triage": TriageResult(),
         "score": JobScore(),
         "company_research": CompanyResearch(),
         "tailored_resume": "",

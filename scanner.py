@@ -13,9 +13,10 @@ import time
 from config import settings
 from state import (
     PipelineState, JobDescription, UserPreferences,
-    ParsedResume, JobScore, CompanyResearch,
+    ParsedResume, JobScore, CompanyResearch, TriageResult,
 )
 from nodes.job_scorer import score_job
+from nodes.job_triage import triage_job
 from sources.base import BaseJobSource, DiscoveredJob
 from sources.jsearch import JSearchSource
 from sources.adzuna import AdzunaSource
@@ -145,6 +146,7 @@ def scan_jobs(
                 ),
                 "preferences": preferences,
                 "parsed_resume": parsed_resume,
+                "triage": TriageResult(),
                 "score": JobScore(),
                 "company_research": CompanyResearch(),
                 "tailored_resume": "",
@@ -154,6 +156,27 @@ def scan_jobs(
                 "status": "",
             }
 
+            # ── Jev triage: skip obvious mismatches before Gemini fires ──
+            triage_result = triage_job(score_state)
+            triage = triage_result.get("triage", TriageResult())
+
+            if triage.skipped:
+                if task_id:
+                    task_manager.update_progress(
+                        task_id, f"jev: skipped {job.title} @ {job.company} (confidence={triage.confidence:.0%}) [{i+1}/{len(new_jobs)}]"
+                    )
+                if verbose:
+                    print(f"[SKIP] Jev filtered ({triage.confidence:.0%} confident)")
+                # Save a zero score so the job still appears in the list
+                store.save_score(job_id, JobScore(
+                    overall_score=0,
+                    reasoning=f"Jev triage: skipped with {triage.confidence:.0%} confidence",
+                    is_worth_applying=False,
+                ))
+                scored_jobs.append({"job": job, "score": JobScore()})
+                continue
+
+            # ── Gemini scoring (only for jobs that passed triage) ──
             result = score_job(score_state)
             score = result.get("score", JobScore())
             elapsed = time.time() - start

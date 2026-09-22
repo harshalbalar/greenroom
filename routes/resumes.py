@@ -8,7 +8,7 @@ from database import get_db, User, Resume, new_id
 from auth_core import get_current_user
 from api_schemas import ResumeUploadRequest, ResumeResponse
 from nodes.resume_parser import parse_resume as parse_resume_node
-from state import PipelineState, JobDescription, UserPreferences, ParsedResume, JobScore, CompanyResearch
+from state import PipelineState, JobDescription, UserPreferences, ParsedResume, JobScore, CompanyResearch, TriageResult
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
@@ -77,6 +77,7 @@ def _parse_and_store(db: Session, user: User, raw_text: str, filename: str, orig
         "job": JobDescription(raw_text=""),
         "preferences": UserPreferences(),
         "parsed_resume": ParsedResume(),
+        "triage": TriageResult(),
         "score": JobScore(),
         "company_research": CompanyResearch(),
         "tailored_resume": "",

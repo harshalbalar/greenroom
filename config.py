@@ -37,6 +37,9 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     FROM_EMAIL: str = os.getenv("FROM_EMAIL", "Greenroom <onboarding@resend.dev>")
 
+    # Jev triage (TypeSafe decision model — pre-filters jobs before Gemini scoring)
+    TYPESAFE_API_KEY: str = os.getenv("TYPESAFE_API_KEY", "")
+
     # Phase 6C: Scheduler
     AUTO_SCAN_HOURS: int = int(os.getenv("AUTO_SCAN_HOURS", "6"))
     MORNING_BRIEF_HOUR: int = int(os.getenv("MORNING_BRIEF_HOUR", "8"))
